@@ -1,0 +1,1276 @@
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local RS = game:GetService("RunService")
+local TS = game:GetService("TweenService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TextChatService = game:GetService("TextChatService")
+local HttpService = game:GetService("HttpService")
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
+
+-- ==========================================
+-- MENGAMBIL DATA GAME (ANTI-GAGAL)
+-- ==========================================
+local MovementState, PCM, WorldManager, ItemsManager, InventoryModule, WorldTiles, TickManager = nil, nil, nil, nil, nil, nil, nil
+local Remotes, PlayerFistRemote, PlayerPlaceRemote, PlayerTradeRemote, SignalConstructor, CBRemote, PlayerMovementRemote
+
+task.spawn(function() pcall(function() MovementState = require(LocalPlayer.PlayerScripts:WaitForChild("PlayerMovement")) end) end)
+task.spawn(function() pcall(function() PCM = require(ReplicatedStorage:WaitForChild("Managers"):WaitForChild("PlayerClientManager")) end) end)
+task.spawn(function() pcall(function() WorldManager = require(ReplicatedStorage:WaitForChild("Managers"):WaitForChild("WorldManager")) end) end)
+task.spawn(function() pcall(function() ItemsManager = require(ReplicatedStorage:WaitForChild("Managers"):WaitForChild("ItemsManager")) end) end)
+task.spawn(function() pcall(function() InventoryModule = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Inventory")) end) end)
+task.spawn(function() pcall(function() WorldTiles = require(ReplicatedStorage:WaitForChild("WorldTiles")) end) end)
+task.spawn(function() pcall(function() TickManager = require(ReplicatedStorage:WaitForChild("Managers"):WaitForChild("TickManager")) end) end)
+task.spawn(function() pcall(function() CBRemote = ReplicatedStorage:WaitForChild("CB", 5) end) end)
+
+task.spawn(function()
+    pcall(function()
+        Remotes = ReplicatedStorage:WaitForChild("Remotes", 10)
+        if Remotes then
+            PlayerFistRemote = Remotes:WaitForChild("PlayerFist", 5)
+            PlayerPlaceRemote = Remotes:WaitForChild("PlayerPlaceItem", 5)
+            PlayerTradeRemote = Remotes:WaitForChild("PlayerTrade", 5)
+            PlayerMovementRemote = Remotes:WaitForChild("PlayerMovementPackets", 5):WaitForChild(LocalPlayer.Name, 5)
+        end
+    end)
+end)
+
+local TILE_SIZE = 4.5 
+
+local function getGridFromScreen(screenX, screenY)
+    local camera = workspace.CurrentCamera
+    if not camera then return nil, nil end
+    local ray = camera:ViewportPointToRay(screenX, screenY)
+    if ray.Direction.Z ~= 0 then
+        local distance = -ray.Origin.Z / ray.Direction.Z
+        local hitPos = ray.Origin + ray.Direction * distance
+        return Vector2.new(math.round(hitPos.X / TILE_SIZE), math.round(hitPos.Y / TILE_SIZE)), hitPos
+    end
+    return nil, nil
+end
+
+-- ==========================================
+-- SYSTEM CONFIG & SAVE DATA
+-- ==========================================
+local ConfigFile = "NLight_Config.json"
+local toggles = { speed = false, infJump = false, fly = false, devTeleport = false, smartAutoFarm = false, autoPlanter = false, autoBreaker = false, godMode = false, antiLag = false, lockScanner = false, xRay = false, tradeSpy = false, timeWarp = false, timeFreeze = false, signalSpy = false, fakeVip = false, chatSpam = false, chatSpy = false, oneHitBreak = false, autoLoot = false, itemRadar = false, farmGrids = {} }
+local savedInputs = {}
+local inputInstances = {}
+
+if readfile and isfile and isfile(ConfigFile) then
+    pcall(function()
+        local data = HttpService:JSONDecode(readfile(ConfigFile))
+        if data.toggles then for k, v in pairs(data.toggles) do toggles[k] = v end end
+        if data.inputs then for k, v in pairs(data.inputs) do savedInputs[k] = v end end
+    end)
+end
+
+task.spawn(function()
+    while task.wait(3) do
+        if writefile then
+            pcall(function()
+                local toSave = { toggles = toggles, inputs = {} }
+                for k, box in pairs(inputInstances) do toSave.inputs[k] = box.Text end
+                writefile(ConfigFile, HttpService:JSONEncode(toSave))
+            end)
+        end
+    end
+end)
+
+-- ==========================================
+-- ENGINE HOOKS (__namecall)
+-- ==========================================
+if hookmetamethod then
+    local oldNamecall
+    oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+        local method = getnamecallmethod()
+        if toggles.godMode and tostring(self.Name) == "PlayerHurtMe" and method == "FireServer" then return end
+        return oldNamecall(self, ...)
+    end)
+end
+
+-- ==========================================
+-- FUNGSI HELPER (ITEM)
+-- ==========================================
+local function getBaseId(itemName)
+    if ItemsManager and ItemsManager.GetBaseId then return ItemsManager.GetBaseId(itemName) end
+    if type(itemName) == "string" then return string.gsub(itemName, "_sapling$", "") end
+    return itemName
+end
+
+local function getHeldItem()
+    if InventoryModule and InventoryModule.GetSelectedHotbarItem then
+        local item = InventoryModule.GetSelectedHotbarItem()
+        if item and item.Id then return string.lower(tostring(item.Id)) end
+    end
+    return nil
+end
+
+-- ==========================================
+-- UI SETUP (MODERN COMPACT THEME)
+-- ==========================================
+local oldGui = LocalPlayer:WaitForChild("PlayerGui"):FindFirstChild("NLightModern")
+if oldGui then oldGui:Destroy() end
+
+local gui = Instance.new("ScreenGui", LocalPlayer.PlayerGui)
+gui.Name = "NLightModern"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true 
+
+local Theme = {
+    Background = Color3.fromRGB(13, 13, 17), Surface = Color3.fromRGB(22, 22, 28), Item = Color3.fromRGB(30, 30, 38), Border = Color3.fromRGB(45, 45, 55),
+    Text = Color3.fromRGB(250, 250, 255), TextMuted = Color3.fromRGB(150, 150, 160), Accent = Color3.fromRGB(99, 102, 241),
+    ToggleOff = Color3.fromRGB(55, 55, 65), Success = Color3.fromRGB(34, 197, 94), Danger = Color3.fromRGB(239, 68, 68),
+    Orange = Color3.fromRGB(245, 158, 11)
+}
+
+local frame = Instance.new("Frame", gui)
+frame.Size = UDim2.new(0, 380, 0, 380); frame.Position = UDim2.new(0.05, 0, 0.2, 0); frame.BackgroundColor3 = Theme.Background; frame.Active = true; frame.Draggable = true; frame.BorderSizePixel = 0
+Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 12); Instance.new("UIStroke", frame).Color = Theme.Border
+
+local titleBar = Instance.new("Frame", frame)
+titleBar.Size = UDim2.new(1, 0, 0, 50); titleBar.BackgroundTransparency = 1
+local title = Instance.new("TextLabel", titleBar)
+title.Text = "NLIGHT"; title.Font = Enum.Font.GothamBlack; title.TextSize = 18; title.TextColor3 = Theme.Text; title.BackgroundTransparency = 1; title.Size = UDim2.new(1, -20, 1, 0); title.Position = UDim2.new(0, 20, 0, 0); title.TextXAlignment = Enum.TextXAlignment.Left
+
+local closeBtn = Instance.new("TextButton", titleBar)
+closeBtn.Text = "✕"; closeBtn.Font = Enum.Font.GothamBold; closeBtn.TextSize = 14; closeBtn.Size = UDim2.new(0, 50, 1, 0); closeBtn.Position = UDim2.new(1, -50, 0, 0); closeBtn.BackgroundTransparency = 1; closeBtn.TextColor3 = Theme.TextMuted
+closeBtn.MouseButton1Click:Connect(function() gui:Destroy() end)
+local minBtn = Instance.new("TextButton", titleBar)
+minBtn.Text = "—"; minBtn.Font = Enum.Font.GothamBold; minBtn.TextSize = 14; minBtn.Size = UDim2.new(0, 50, 1, 0); minBtn.Position = UDim2.new(1, -90, 0, 0); minBtn.BackgroundTransparency = 1; minBtn.TextColor3 = Theme.TextMuted
+
+local openBtn = Instance.new("TextButton", gui)
+openBtn.Size = UDim2.new(0, 45, 0, 45); openBtn.Position = UDim2.new(0.02, 0, 0.5, 0); openBtn.BackgroundColor3 = Theme.Surface; openBtn.Text = "NL"; openBtn.Font = Enum.Font.GothamBlack; openBtn.TextSize = 14; openBtn.TextColor3 = Theme.Accent; openBtn.Visible = false; openBtn.Active = true; openBtn.Draggable = true; Instance.new("UICorner", openBtn).CornerRadius = UDim.new(1, 0); Instance.new("UIStroke", openBtn).Color = Theme.Border
+
+local tabBar = Instance.new("ScrollingFrame", frame)
+tabBar.Size = UDim2.new(1, -40, 0, 35); tabBar.Position = UDim2.new(0, 20, 0, 50); tabBar.BackgroundTransparency = 1; tabBar.ScrollBarThickness = 0; tabBar.CanvasSize = UDim2.new(0, 0, 0, 0); tabBar.AutomaticCanvasSize = Enum.AutomaticSize.X
+local tabLayout = Instance.new("UIListLayout", tabBar); tabLayout.FillDirection = Enum.FillDirection.Horizontal; tabLayout.SortOrder = Enum.SortOrder.LayoutOrder; tabLayout.Padding = UDim.new(0, 20)
+
+local tabPages, tabButtons = {}, {}
+local contentArea = Instance.new("Frame", frame)
+contentArea.Size = UDim2.new(1, 0, 1, -100); contentArea.Position = UDim2.new(0, 0, 0, 100); contentArea.BackgroundTransparency = 1
+
+local activeIndicator = Instance.new("Frame", frame)
+activeIndicator.Size = UDim2.new(0, 30, 0, 3); activeIndicator.BackgroundColor3 = Theme.Accent; activeIndicator.BorderSizePixel = 0; activeIndicator.Position = UDim2.new(0, 20, 0, 85); Instance.new("UICorner", activeIndicator).CornerRadius = UDim.new(1,0)
+
+-- ==========================================
+-- POPUP GRID SELECTOR UI
+-- ==========================================
+local popupOverlay = Instance.new("Frame", gui)
+popupOverlay.Size = UDim2.new(1, 0, 1, 0)
+popupOverlay.BackgroundColor3 = Color3.new(0, 0, 0)
+popupOverlay.BackgroundTransparency = 0.5
+popupOverlay.Visible = false
+popupOverlay.Active = true
+popupOverlay.ZIndex = 10
+
+local gridPopup = Instance.new("Frame", popupOverlay)
+gridPopup.Size = UDim2.new(0, 300, 0, 380)
+gridPopup.Position = UDim2.new(0.5, -150, 0.5, -190)
+gridPopup.BackgroundColor3 = Theme.Background
+gridPopup.ZIndex = 11
+Instance.new("UICorner", gridPopup).CornerRadius = UDim.new(0, 12)
+Instance.new("UIStroke", gridPopup).Color = Theme.Border
+
+local gridHeader = Instance.new("Frame", gridPopup)
+gridHeader.Size = UDim2.new(1, 0, 0, 50)
+gridHeader.BackgroundTransparency = 1
+gridHeader.ZIndex = 12
+
+local gridTitle = Instance.new("TextLabel", gridHeader)
+gridTitle.Size = UDim2.new(1, -60, 1, 0)
+gridTitle.Position = UDim2.new(0, 20, 0, 0)
+gridTitle.BackgroundTransparency = 1
+gridTitle.Text = "SELECT GRID FARM"
+gridTitle.Font = Enum.Font.GothamBold
+gridTitle.TextSize = 16
+gridTitle.TextColor3 = Theme.Text
+gridTitle.ZIndex = 12
+gridTitle.TextXAlignment = Enum.TextXAlignment.Left
+
+local gridCloseBtn = Instance.new("TextButton", gridHeader)
+gridCloseBtn.Size = UDim2.new(0, 50, 0, 50)
+gridCloseBtn.Position = UDim2.new(1, -50, 0, 0)
+gridCloseBtn.BackgroundTransparency = 1
+gridCloseBtn.Text = "✕"
+gridCloseBtn.Font = Enum.Font.GothamBold
+gridCloseBtn.TextSize = 14
+gridCloseBtn.TextColor3 = Theme.TextMuted
+gridCloseBtn.ZIndex = 12
+gridCloseBtn.MouseButton1Click:Connect(function() popupOverlay.Visible = false end)
+
+local gridContainer = Instance.new("Frame", gridPopup)
+gridContainer.Size = UDim2.new(0, 245, 0, 245)
+gridContainer.Position = UDim2.new(0.5, -122.5, 0, 50)
+gridContainer.BackgroundTransparency = 1
+gridContainer.ZIndex = 12
+
+local uigrid = Instance.new("UIGridLayout", gridContainer)
+uigrid.CellSize = UDim2.new(0, 45, 0, 45)
+uigrid.CellPadding = UDim2.new(0, 5, 0, 5)
+uigrid.SortOrder = Enum.SortOrder.LayoutOrder
+
+-- Membuat 25 Kotak Grid (5x5)
+for i = 1, 25 do
+    -- Kalkulasi Offset (X Kiri-Kanan, Y Atas-Bawah relative to player at Row 4)
+    local dx = (i - 1) % 5 - 2
+    local row = math.floor((i - 1) / 5)
+    local dy = 3 - row 
+    local key = tostring(dx) .. "," .. tostring(dy)
+
+    local btn = Instance.new("TextButton", gridContainer)
+    btn.Text = ""
+    btn.BackgroundColor3 = toggles.farmGrids[key] and Theme.Orange or Theme.Item
+    btn.ZIndex = 13
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+
+    -- Penanda Posisi Pemain (Baris ke-2 dari bawah, Kolom Tengah, Baris 4, Kolom 3)
+    if dx == 0 and dy == 0 then
+        local userPenanda = Instance.new("Frame", btn)
+        userPenanda.Size = UDim2.new(0, 40, 0, 40)
+        userPenanda.Position = UDim2.new(0.5, 0, 0.5, 0)
+        userPenanda.AnchorPoint = Vector2.new(0.5, 0.5)
+        userPenanda.BackgroundColor3 = Theme.Orange
+        userPenanda.BackgroundTransparency = 0.5
+        userPenanda.ZIndex = 14
+        Instance.new("UICorner", userPenanda).CornerRadius = UDim.new(1, 0)
+
+        local userIconContainer = Instance.new("Frame", userPenanda)
+        userIconContainer.Size = UDim2.new(0, 20, 0, 20)
+        userIconContainer.Position = UDim2.new(0.5, 0, 0.4, 0)
+        userIconContainer.AnchorPoint = Vector2.new(0.5, 0.5)
+        userIconContainer.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        userIconContainer.ZIndex = 15
+        Instance.new("UICorner", userIconContainer).CornerRadius = UDim.new(1, 0)
+        
+        local userIcon = Instance.new("ImageLabel", userIconContainer)
+        userIcon.Size = UDim2.new(1, 0, 1, 0)
+        userIcon.BackgroundTransparency = 1
+        userIcon.Image = "rbxassetid://15264843997" -- Ikon pengguna
+        userIcon.ImageColor3 = Theme.Orange
+        userIcon.ZIndex = 16
+
+        local lbl = Instance.new("TextLabel", userPenanda)
+        lbl.Size = UDim2.new(1, 0, 0, 15)
+        lbl.Position = UDim2.new(0.5, 0, 0.7, 0)
+        lbl.AnchorPoint = Vector2.new(0.5, 0.5)
+        lbl.BackgroundTransparency = 1
+        lbl.Text = "I'M HERE"
+        lbl.Font = Enum.Font.GothamBold
+        lbl.TextSize = 8
+        lbl.TextColor3 = Theme.Orange
+        lbl.ZIndex = 15
+    end
+
+    btn.MouseButton1Click:Connect(function()
+        toggles.farmGrids[key] = not toggles.farmGrids[key]
+        TS:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = toggles.farmGrids[key] and Theme.Orange or Theme.Item}):Play()
+    end)
+end
+
+local saveGridBtn = Instance.new("TextButton", gridPopup)
+saveGridBtn.Size = UDim2.new(0, 200, 0, 45)
+saveGridBtn.Position = UDim2.new(0.5, -100, 1, -60)
+saveGridBtn.BackgroundColor3 = Theme.Success
+saveGridBtn.Text = "Done"
+saveGridBtn.Font = Enum.Font.GothamBold
+saveGridBtn.TextSize = 16
+saveGridBtn.TextColor3 = Color3.fromRGB(13, 13, 17)
+saveGridBtn.ZIndex = 12
+saveGridBtn.AutoButtonColor = false
+Instance.new("UICorner", saveGridBtn).CornerRadius = UDim.new(0, 8)
+
+saveGridBtn.MouseEnter:Connect(function() TS:Create(saveGridBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(50, 220, 110)}):Play() end)
+saveGridBtn.MouseLeave:Connect(function() TS:Create(saveGridBtn, TweenInfo.new(0.2), {BackgroundColor3 = Theme.Success}):Play() end)
+
+saveGridBtn.MouseButton1Click:Connect(function()
+    popupOverlay.Visible = false
+end)
+
+local function createTab(name)
+    local tabBtn = Instance.new("TextButton", tabBar)
+    tabBtn.Size = UDim2.new(0, 0, 1, 0); tabBtn.AutomaticSize = Enum.AutomaticSize.X; tabBtn.Text = string.upper(name); tabBtn.Font = Enum.Font.GothamBold; tabBtn.TextSize = 12; tabBtn.BackgroundTransparency = 1; tabBtn.TextColor3 = Theme.TextMuted
+    table.insert(tabButtons, tabBtn)
+
+    local tabPage = Instance.new("ScrollingFrame", contentArea)
+    tabPage.Size = UDim2.new(1, 0, 1, 0); tabPage.CanvasSize = UDim2.new(0, 0, 0, 0); tabPage.AutomaticCanvasSize = Enum.AutomaticSize.Y; tabPage.BackgroundTransparency = 1; tabPage.ScrollBarThickness = 4; tabPage.ScrollBarImageColor3 = Theme.Border; tabPage.Visible = false
+    local pageLayout = Instance.new("UIListLayout", tabPage); pageLayout.Padding = UDim.new(0, 15); pageLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    Instance.new("UIPadding", tabPage).PaddingTop = UDim.new(0, 5); Instance.new("UIPadding", tabPage).PaddingBottom = UDim.new(0, 20)
+    table.insert(tabPages, tabPage)
+
+    tabBtn.MouseButton1Click:Connect(function()
+        for _, btn in ipairs(tabButtons) do btn.TextColor3 = Theme.TextMuted end
+        for _, page in ipairs(tabPages) do page.Visible = false end
+        tabBtn.TextColor3 = Theme.Text; tabPage.Visible = true
+        TS:Create(activeIndicator, TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2.new(0, tabBtn.AbsolutePosition.X - frame.AbsolutePosition.X, 0, 85), Size = UDim2.new(0, tabBtn.AbsoluteSize.X, 0, 3)}):Play()
+    end)
+    return tabPage, tabBtn
+end
+
+local function createSection(parent, titleText)
+    local section = Instance.new("Frame", parent)
+    section.Size = UDim2.new(0.92, 0, 0, 0); section.AutomaticSize = Enum.AutomaticSize.Y; section.BackgroundColor3 = Theme.Surface
+    Instance.new("UICorner", section).CornerRadius = UDim.new(0, 10); Instance.new("UIStroke", section).Color = Theme.Border
+    local title = Instance.new("TextLabel", section)
+    title.Size = UDim2.new(1, -30, 0, 35); title.Position = UDim2.new(0, 15, 0, 0); title.BackgroundTransparency = 1; title.Text = string.upper(titleText); title.TextColor3 = Theme.Accent; title.Font = Enum.Font.GothamBold; title.TextSize = 11; title.TextXAlignment = Enum.TextXAlignment.Left
+    local content = Instance.new("Frame", section)
+    content.Size = UDim2.new(1, 0, 0, 0); content.Position = UDim2.new(0, 0, 0, 35); content.AutomaticSize = Enum.AutomaticSize.Y; content.BackgroundTransparency = 1
+    local layout = Instance.new("UIListLayout", content)
+    layout.Padding = UDim.new(0, 8); layout.HorizontalAlignment = Enum.HorizontalAlignment.Center; layout.SortOrder = Enum.SortOrder.LayoutOrder
+    Instance.new("UIPadding", content).PaddingBottom = UDim.new(0, 15)
+    return content
+end
+
+local function createToggle(text, stateKey, parent, isDanger, callback)
+    local container = Instance.new("TextButton", parent)
+    container.Size = UDim2.new(0.92, 0, 0, 40); container.BackgroundColor3 = Theme.Item; container.Text = ""; container.AutoButtonColor = false
+    Instance.new("UICorner", container).CornerRadius = UDim.new(0, 6)
+    local lbl = Instance.new("TextLabel", container); lbl.Size = UDim2.new(1, -60, 1, 0); lbl.Position = UDim2.new(0, 15, 0, 0); lbl.BackgroundTransparency = 1; lbl.Text = text; lbl.TextColor3 = isDanger and Theme.Danger or Theme.Text; lbl.Font = Enum.Font.GothamMedium; lbl.TextSize = 13; lbl.TextXAlignment = Enum.TextXAlignment.Left
+    local track = Instance.new("Frame", container); track.Size = UDim2.new(0, 34, 0, 18); track.Position = UDim2.new(1, -45, 0.5, -9); track.BackgroundColor3 = Theme.ToggleOff; Instance.new("UICorner", track).CornerRadius = UDim.new(1, 0)
+    local knob = Instance.new("Frame", track); knob.Size = UDim2.new(0, 12, 0, 12); knob.Position = UDim2.new(0, 3, 0.5, -6); knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255); Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
+    local activeColor = isDanger and Theme.Danger or Theme.Accent
+    local function updateVisuals()
+        local state = toggles[stateKey]
+        local ti = TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+        TS:Create(knob, ti, {Position = state and UDim2.new(1, -15, 0.5, -6) or UDim2.new(0, 3, 0.5, -6)}):Play()
+        TS:Create(track, ti, {BackgroundColor3 = state and activeColor or Theme.ToggleOff}):Play()
+    end
+    updateVisuals() 
+    container.MouseButton1Click:Connect(function() toggles[stateKey] = not toggles[stateKey]; updateVisuals(); if callback then callback(toggles[stateKey]) end end)
+    return function() updateVisuals() end 
+end
+
+local function createInputRow(labelTxt, defaultVal, parent, boxWidth, stateKey)
+    local container = Instance.new("Frame", parent)
+    container.Size = UDim2.new(0.92, 0, 0, 40); container.BackgroundColor3 = Theme.Item; Instance.new("UICorner", container).CornerRadius = UDim.new(0, 6)
+    local lbl = Instance.new("TextLabel", container); lbl.Size = UDim2.new(1 - (boxWidth or 0.35) - 0.1, 0, 1, 0); lbl.Position = UDim2.new(0, 15, 0, 0); lbl.BackgroundTransparency = 1; lbl.Text = labelTxt; lbl.TextColor3 = Theme.Text; lbl.Font = Enum.Font.GothamMedium; lbl.TextSize = 13; lbl.TextXAlignment = Enum.TextXAlignment.Left
+    local boxContainer = Instance.new("Frame", container); boxContainer.Size = UDim2.new(boxWidth or 0.35, 0, 0, 26); boxContainer.Position = UDim2.new(1 - (boxWidth or 0.35) - 0.05, 0, 0.5, -13); boxContainer.BackgroundColor3 = Theme.Background; Instance.new("UICorner", boxContainer).CornerRadius = UDim.new(0, 4); Instance.new("UIStroke", boxContainer).Color = Theme.Border
+    local box = Instance.new("TextBox", boxContainer); box.Size = UDim2.new(1, 0, 1, 0); box.BackgroundTransparency = 1; 
+    local actualDefault = (stateKey and savedInputs[stateKey]) and savedInputs[stateKey] or defaultVal
+    box.Text = tostring(actualDefault); box.Font = Enum.Font.GothamBold; box.TextSize = 12; box.TextColor3 = Theme.Accent; box.ClearTextOnFocus = false
+    if stateKey then inputInstances[stateKey] = box end
+    return box
+end
+
+local function createDropdown(labelTxt, options, stateKey, parent, callback)
+    local container = Instance.new("Frame", parent)
+    container.Size = UDim2.new(0.92, 0, 0, 40)
+    container.BackgroundColor3 = Theme.Item
+    container.ClipsDescendants = true
+    Instance.new("UICorner", container).CornerRadius = UDim.new(0, 6)
+    local lbl = Instance.new("TextLabel", container)
+    lbl.Size = UDim2.new(0.5, 0, 0, 40); lbl.Position = UDim2.new(0, 15, 0, 0); lbl.BackgroundTransparency = 1; lbl.Text = labelTxt; lbl.TextColor3 = Theme.Text; lbl.Font = Enum.Font.GothamMedium; lbl.TextSize = 13; lbl.TextXAlignment = Enum.TextXAlignment.Left
+    local btnContainer = Instance.new("Frame", container)
+    btnContainer.Size = UDim2.new(0.4, 0, 0, 26); btnContainer.Position = UDim2.new(0.55, 0, 0, 7); btnContainer.BackgroundColor3 = Theme.Background; Instance.new("UICorner", btnContainer).CornerRadius = UDim.new(0, 4); Instance.new("UIStroke", btnContainer).Color = Theme.Border
+    local mainBtn = Instance.new("TextButton", btnContainer)
+    mainBtn.Size = UDim2.new(1, 0, 1, 0); mainBtn.BackgroundTransparency = 1; toggles[stateKey] = toggles[stateKey] or options[1]; mainBtn.Text = "▶ " .. toggles[stateKey]; mainBtn.Font = Enum.Font.GothamBold; mainBtn.TextSize = 11; mainBtn.TextColor3 = Theme.Accent
+    local optionList = Instance.new("Frame", container)
+    optionList.Size = UDim2.new(1, 0, 0, #options * 30); optionList.Position = UDim2.new(0, 0, 0, 40); optionList.BackgroundTransparency = 1
+    local listLayout = Instance.new("UIListLayout", optionList); listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    
+    local isOpen = false
+    mainBtn.MouseButton1Click:Connect(function()
+        isOpen = not isOpen
+        if isOpen then TS:Create(container, TweenInfo.new(0.25, Enum.EasingStyle.Quint), {Size = UDim2.new(0.92, 0, 0, 40 + (#options * 30))}):Play()
+        else TS:Create(container, TweenInfo.new(0.25, Enum.EasingStyle.Quint), {Size = UDim2.new(0.92, 0, 0, 40)}):Play() end
+    end)
+    
+    for i, opt in ipairs(options) do
+        local optBtn = Instance.new("TextButton", optionList)
+        optBtn.Size = UDim2.new(1, 0, 0, 30); optBtn.BackgroundColor3 = Theme.Surface; optBtn.Text = opt; optBtn.Font = Enum.Font.GothamMedium; optBtn.TextSize = 12; optBtn.TextColor3 = Theme.TextMuted; optBtn.BorderSizePixel = 0
+        optBtn.MouseEnter:Connect(function() optBtn.TextColor3 = Theme.Text end)
+        optBtn.MouseLeave:Connect(function() optBtn.TextColor3 = Theme.TextMuted end)
+        optBtn.MouseButton1Click:Connect(function()
+            toggles[stateKey] = opt; mainBtn.Text = "▶ " .. opt; isOpen = false
+            TS:Create(container, TweenInfo.new(0.25, Enum.EasingStyle.Quint), {Size = UDim2.new(0.92, 0, 0, 40)}):Play()
+            if callback then callback(opt) end
+        end)
+    end
+end
+
+local function createButton(text, parent, callback)
+    local btn = Instance.new("TextButton", parent)
+    btn.Size = UDim2.new(0.92, 0, 0, 40); btn.BackgroundColor3 = Theme.Item; btn.Text = text; btn.Font = Enum.Font.GothamBold; btn.TextSize = 13; btn.TextColor3 = Theme.Text; btn.AutoButtonColor = false; Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6); Instance.new("UIStroke", btn).Color = Theme.Border
+    btn.MouseEnter:Connect(function() TS:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(45, 45, 55)}):Play() end)
+    btn.MouseLeave:Connect(function() TS:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = Theme.Item}):Play() end)
+    btn.MouseButton1Down:Connect(function() TS:Create(btn, TweenInfo.new(0.1), {BackgroundColor3 = Theme.Accent}):Play() end)
+    btn.MouseButton1Up:Connect(function() TS:Create(btn, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(45, 45, 55)}):Play() end)
+    if callback then btn.MouseButton1Click:Connect(callback) end
+    return btn
+end
+
+local function createLabelDisplay(text, parent)
+    local container = Instance.new("Frame", parent)
+    container.Size = UDim2.new(0.92, 0, 0, 30); container.BackgroundColor3 = Theme.Background; Instance.new("UICorner", container).CornerRadius = UDim.new(0, 6)
+    local lbl = Instance.new("TextLabel", container); lbl.Size = UDim2.new(1, -20, 1, 0); lbl.Position = UDim2.new(0, 10, 0, 0); lbl.BackgroundTransparency = 1; lbl.Text = text; lbl.TextColor3 = Theme.Accent; lbl.Font = Enum.Font.GothamBold; lbl.TextSize = 11; lbl.TextXAlignment = Enum.TextXAlignment.Left
+    return lbl
+end
+
+-- ==========================================
+-- MEMBANGUN TAMPILAN (TABS & SECTIONS)
+-- ==========================================
+local pageMove, btnMove = createTab("Move")
+local pageAura, btnAura = createTab("Aura")
+local pageFarm, btnFarm = createTab("Farm")
+local pageWorld, btnWorld = createTab("World")
+local pageMisc, btnMisc = createTab("Misc")
+
+btnMove.TextColor3 = Theme.Text; pageMove.Visible = true
+task.spawn(function() task.wait(0.1); activeIndicator.Position = UDim2.new(0, btnMove.AbsolutePosition.X - frame.AbsolutePosition.X, 0, 85); activeIndicator.Size = UDim2.new(0, btnMove.AbsoluteSize.X, 0, 3) end)
+
+-- TAB 1: MOVEMENT
+local secChar = createSection(pageMove, "Character")
+createToggle("God Mode (Invincible)", "godMode", secChar)
+createToggle("Admin Teleport (Click)", "devTeleport", secChar)
+
+local secMove = createSection(pageMove, "Movement Adjustments")
+local speedBox = createInputRow("Speed Modifier", "2.0", secMove, 0.35, "speedBox")
+createToggle("Enable Super Speed", "speed", secMove)
+createToggle("Infinite Jump", "infJump", secMove)
+createToggle("Anti-Gravity (Fly)", "fly", secMove)
+
+local secTime = createSection(pageMove, "Engine Time")
+local tpsBox = createInputRow("Time Warp TPS (Max 200)", "100", secTime, 0.35, "tpsBox")
+local function updateEngineTime()
+    pcall(function()
+        if not TickManager then return end
+        if toggles.timeFreeze then TickManager.TPS = 0.00001
+        elseif toggles.timeWarp then TickManager.TPS = math.clamp(tonumber(tpsBox.Text) or 100, 1, 200) 
+        else TickManager.TPS = 20 end
+    end)
+end
+createToggle("Enable Time Warp", "timeWarp", secTime, false, updateEngineTime)
+createToggle("Freeze Time (Za Warudo)", "timeFreeze", secTime, true, updateEngineTime)
+
+-- TAB 2: AURA (SMART AUTO-FARM ENGINE DENGAN VISUAL GRID MODERN)
+local secAuraInfo = createSection(pageAura, "Live Status")
+local posDisplay = createLabelDisplay("Current Grid: X: 0, Y: 0", secAuraInfo)
+
+local secSmartFarm = createSection(pageAura, "Smart Auto-Farm Engine")
+createButton("Select Grid Farm", secSmartFarm, function() popupOverlay.Visible = true end)
+local smartFarmItemBox = createInputRow("Item ID to Place", "auto", secSmartFarm, 0.4, "smartFarmItemBox")
+local smartFarmDelayBox = createInputRow("Delay Break (Sec)", "0.15", secSmartFarm, 0.35, "smartFarmDelayBox")
+local smartFarmHitsBox = createInputRow("Hits Per Break", "25", secSmartFarm, 0.35, "smartFarmHitsBox")
+createToggle("Enable Smart Farm Engine", "smartAutoFarm", secSmartFarm, false)
+
+-- TAB 3: FARM (SEPARATED PLANTER & BREAKER)
+local secPlanter = createSection(pageFarm, "Auto Planter (Custom Base)")
+local planterBaseBox = createInputRow("Base Block (Media Tanam)", "dirt", secPlanter, 0.4, "planterBaseBox")
+local planterItemBox = createInputRow("Item ID to Plant", "seed", secPlanter, 0.4, "planterItemBox")
+local planterSpeedBox = createInputRow("Move Speed", "45", secPlanter, 0.35, "planterSpeedBox")
+local updatePlanterToggle = createToggle("Enable Auto Planter", "autoPlanter", secPlanter, false)
+
+local secBreaker = createSection(pageFarm, "Auto Breaker (Zig-Zag)")
+local breakerTargetBox = createInputRow("Target to Break", "wood", secBreaker, 0.4, "breakerTargetBox")
+local breakerSpeedBox = createInputRow("Move Speed", "45", secBreaker, 0.35, "breakerSpeedBox")
+createToggle("Enable Auto Breaker", "autoBreaker", secBreaker, false)
+local hitMultiplierBox = createInputRow("Hit Spam / Break", "25", secBreaker, 0.35, "hitMultiplierBox")
+createToggle("One Hit Break (Burst)", "oneHitBreak", secBreaker, true)
+
+local secLoot = createSection(pageFarm, "Genius Auto-Loot")
+local lootSpeedBox = createInputRow("AI Run Speed", "45", secLoot, 0.35, "lootSpeedBox") 
+createToggle("Radar Item Drop", "itemRadar", secLoot, false)
+createToggle("Enable Auto-Loot", "autoLoot", secLoot, false) 
+
+-- TAB 4: WORLD
+local secCamera = createSection(pageWorld, "Camera & Viewport")
+createButton("Unlock Camera Max Zoom", secCamera, function() pcall(function() LocalPlayer.CameraMaxZoomDistance = 100000 end) end)
+createToggle("Lock Scanner (Show Borders)", "lockScanner", secCamera, false, function(state)
+    pcall(function()
+        if WorldManager then
+            for _, col in pairs(WorldManager.RenderedTiles) do
+                for _, layers in pairs(col) do
+                    if layers[5] then layers[5].ImageTransparency = state and 0.3 or 1; layers[5].ImageColor3 = state and Color3.fromRGB(255, 255, 0) or Color3.new(1,1,1) end
+                end
+            end
+        end
+    end)
+end)
+createToggle("X-Ray (Hide Terrain)", "xRay", secCamera, false, function(state)
+    pcall(function()
+        if WorldManager then
+            for _, col in pairs(WorldManager.RenderedTiles) do
+                for _, layers in pairs(col) do if layers[1] then layers[1].Visible = not state end end
+            end
+        end
+    end)
+end)
+
+local secData = createSection(pageWorld, "Data Dumper")
+createButton("Dump Map Structure (F9)", secData, function()
+    pcall(function()
+        if WorldTiles then
+            print("\n--- [MAP DUMPED] ---")
+            for x, col in pairs(WorldTiles) do
+                if type(col) == "table" then
+                    for y, layers in pairs(col) do
+                        for layerZ, data in pairs(layers) do print(string.format("Grid[%s, %s] L%s = ID: %s", x, y, layerZ, type(data)=="table" and tostring(data[1]) or tostring(data))) end
+                    end
+                end
+            end
+            print("--------------------\n")
+        end
+    end)
+end)
+
+-- TAB 5: MISC
+local secChatSpam = createSection(pageMisc, "Chat Exploits (CB Bypass)")
+local spamMsgBox = createInputRow("Spam Text", "NLight On Top!", secChatSpam, 0.45, "spamMsgBox")
+local spamDelayBox = createInputRow("Spam Delay (Sec)", "2", secChatSpam, 0.45, "spamDelayBox")
+createToggle("Enable Auto Spammer", "chatSpam", secChatSpam, true)
+createToggle("Global Chat Spy (F9 Console)", "chatSpy", secChatSpam)
+
+local secVisual = createSection(pageMisc, "Client Visuals")
+createToggle("Anti-Lag VFX (No Punch)", "antiLag", secVisual, false, function(state)
+    pcall(function()
+        if PCM then
+            local oldPunch = PCM.PunchAnimation
+            PCM.PunchAnimation = function(player, pos)
+                if state and player == LocalPlayer then return end
+                return oldPunch(player, pos)
+            end
+        end
+    end)
+end)
+
+local secAdmin = createSection(pageMisc, "Admin & Spoofing")
+createToggle("Fake VIP (Cosmetic)", "fakeVip", secAdmin, false, function(state)
+    pcall(function()
+        if state then
+            LocalPlayer:SetAttribute("namePrefix", "[NLight VIP] "); LocalPlayer:SetAttribute("nameColor", Color3.fromRGB(255, 215, 0))
+        else
+            LocalPlayer:SetAttribute("namePrefix", ""); LocalPlayer:SetAttribute("nameColor", Color3.fromRGB(255, 255, 255))
+        end
+    end)
+end)
+
+local secSpy = createSection(pageMisc, "Developer Tools")
+createToggle("Trade Spy (Console F9)", "tradeSpy", secSpy)
+createToggle("Signal Spy (Console F9)", "signalSpy", secSpy)
+local copyItemsBtn
+copyItemsBtn = createButton("Scan & Copy Items (Clip)", secSpy, function()
+    pcall(function()
+        if ItemsManager and ItemsManager.ItemsData then
+            local resultStr = "=== NLIGHT ITEM DATABASE ===\n"
+            for id, data in pairs(ItemsManager.ItemsData) do resultStr = resultStr .. "ID: " .. tostring(id) .. " | Name: " .. tostring(data.Name or "Unknown") .. "\n" end
+            if setclipboard then setclipboard(resultStr); copyItemsBtn.Text = "Copied!" else print(resultStr); copyItemsBtn.Text = "Check Console" end
+            task.delay(2, function() copyItemsBtn.Text = "Scan & Copy Items (Clip)" end)
+        end
+    end)
+end)
+
+-- ==========================================
+-- MEMUAT REMOTES & MENGHUBUNGKAN SPY
+-- ==========================================
+task.spawn(function()
+    if Remotes and SignalConstructor and type(SignalConstructor) == "function" then
+        pcall(function()
+            local dummySignal = SignalConstructor()
+            local signalMetatable = getmetatable(dummySignal)
+            if signalMetatable and signalMetatable.Fire then
+                local oldFire = signalMetatable.Fire
+                signalMetatable.Fire = function(self, ...)
+                    if toggles.signalSpy then
+                        local args = {...}; local argString = ""
+                        for i, v in ipairs(args) do argString = argString .. tostring(v) .. (i < #args and ", " or "") end
+                        print("[SIGNAL SPY] Fired: (" .. argString .. ")")
+                    end
+                    return oldFire(self, ...)
+                end
+            end
+        end)
+    end
+    if PlayerTradeRemote then
+        PlayerTradeRemote.OnClientEvent:Connect(function(state, p1, p1Items, p2, p2Items)
+            if toggles.tradeSpy and state == 10 then
+                pcall(function()
+                    print("\n--- [TRADE INTERCEPTED] ---")
+                    print(tostring(p1) .. " MENDAPATKAN DARI " .. tostring(p2) .. ":")
+                    if type(p2Items) == "table" then
+                        for _, item in pairs(p2Items) do
+                            local name = (ItemsManager and ItemsManager.ItemsData[item.Id] and ItemsManager.ItemsData[item.Id].Name) or tostring(item.Id)
+                            print(" + " .. tostring(item.Amount) .. "x " .. name)
+                        end
+                    end
+                    print("---------------------------\n")
+                end)
+            end
+        end)
+    end
+end)
+
+task.spawn(function()
+    if TextChatService then
+        TextChatService.MessageReceived:Connect(function(textChatMessage)
+            if toggles.chatSpy and textChatMessage.TextSource then
+                pcall(function()
+                    if textChatMessage.TextSource.UserId ~= LocalPlayer.UserId then
+                        local senderName = textChatMessage.TextSource.Name
+                        local channelName = tostring(textChatMessage.TextChannel.Name)
+                        local msgText = tostring(textChatMessage.Text)
+                        print("[🕵️ CHAT SPY] " .. senderName .. " [" .. channelName .. "]: " .. msgText)
+                    end
+                end)
+            end
+        end)
+    end
+end)
+
+-- ==========================================
+-- GENIUS AI PATHFINDING HELPER (NO LIMITS, SMART AVOIDANCE)
+-- ==========================================
+local blacklistedItems = {}
+local blacklistedSpots = {}
+
+task.spawn(function()
+    while task.wait(5) do 
+        blacklistedSpots = {} 
+        blacklistedItems = {}
+    end
+end)
+
+local function isOutOfBounds(x, y)
+    local minBound = workspace:GetAttribute("WorldMin")
+    local maxBound = workspace:GetAttribute("WorldMax")
+    if minBound and maxBound then
+        if x < minBound.X or x > maxBound.X or y < minBound.Y or y > maxBound.Y then return true end
+    end
+    if WorldTiles and type(WorldTiles) == "table" then
+        if rawget(WorldTiles, x) == nil and rawget(WorldTiles, tostring(x)) == nil then return true end
+    end
+    return false
+end
+
+-- SMART BLACKLIST: Deteksi Jika Item Nyangkut
+local function isItemTrapped(x, y)
+    if not WorldManager or not WorldManager.GetTile then return false end
+    
+    -- Jika posisi item itu sendiri tertumpuk block solid, berarti tidak bisa diambil
+    if WorldManager.GetTile(x, y, 1) then return true end
+    
+    -- Jika diapit 4 block solid (Atas, Bawah, Kiri, Kanan)
+    local up = WorldManager.GetTile(x, y + 1, 1)
+    local down = WorldManager.GetTile(x, y - 1, 1)
+    local right = WorldManager.GetTile(x + 1, y, 1)
+    local left = WorldManager.GetTile(x - 1, y, 1)
+    
+    if up and down and right and left then return true end
+    
+    return false
+end
+
+local function isLineOfSightClear(x0, y0, x1, y1)
+    local dx = math.abs(x1 - x0)
+    local dy = math.abs(y1 - y0)
+    local sx = x0 < x1 and 1 or -1
+    local sy = y0 < y1 and 1 or -1
+    local err = dx - dy
+
+    while true do
+        if isOutOfBounds(x0, y0) then return false end 
+        if x0 == x1 and y0 == y1 then break end
+        local e2 = 2 * err
+        if e2 > -dy then err = err - dy; x0 = x0 + sx end
+        if e2 < dx then err = err + dx; y0 = y0 + sy end
+        if WorldManager and WorldManager.GetTile and (x0 ~= x1 or y0 ~= y1) then
+            if WorldManager.GetTile(x0, y0, 1) then return false end
+        end
+    end
+    return true
+end
+
+-- UNLIMITED OPTIMIZED A* ALGORITHM
+local function getPath(startX, startY, endX, endY)
+    local open = {}
+    local closed = {}
+    local nodeGrid = {} 
+    
+    local startNode = {x = startX, y = startY, g = 0, f = 0, parent = nil}
+    table.insert(open, startNode)
+    nodeGrid[startX .. "," .. startY] = startNode
+    
+    local iter = 0
+    -- Movement Dirs & Cost
+    local dirs = {
+        {dx=1, dy=0, cost=10}, {dx=-1, dy=0, cost=10}, {dx=0, dy=1, cost=10}, {dx=0, dy=-1, cost=10},
+        {dx=1, dy=1, cost=14}, {dx=1, dy=-1, cost=14}, {dx=-1, dy=1, cost=14}, {dx=-1, dy=-1, cost=14}
+    }
+    
+    while #open > 0 do
+        iter = iter + 1
+        if iter % 1000 == 0 then task.wait() end -- Mencegah crash jika map sangat luas
+        
+        -- Cari node dengan f terendah
+        local currIdx = 1
+        local currNode = open[1]
+        for i = 2, #open do
+            if open[i].f < currNode.f then
+                currNode = open[i]
+                currIdx = i
+            end
+        end
+        table.remove(open, currIdx)
+        
+        local key = currNode.x .. "," .. currNode.y
+        closed[key] = true
+        
+        if currNode.x == endX and currNode.y == endY then
+            local path = {}
+            local temp = currNode
+            while temp do table.insert(path, 1, Vector2.new(temp.x, temp.y)); temp = temp.parent end
+            return path
+        end
+        
+        for _, d in ipairs(dirs) do
+            local nx = currNode.x + d.dx
+            local ny = currNode.y + d.dy
+            local nKey = nx .. "," .. ny
+            
+            if not closed[nKey] then
+                local isSolid = false
+                if isOutOfBounds(nx, ny) then
+                    isSolid = true
+                elseif (nx ~= endX or ny ~= endY) and WorldManager and WorldManager.GetTile then
+                    if WorldManager.GetTile(nx, ny, 1) then isSolid = true end
+                    
+                    -- ANTI TABRAK: Cegah memotong sudut menyilang (Corner Cutting) jika ada blok di sampingnya
+                    if not isSolid and d.cost == 14 then
+                        if WorldManager.GetTile(currNode.x + d.dx, currNode.y, 1) or WorldManager.GetTile(currNode.x, currNode.y + d.dy, 1) then 
+                            isSolid = true 
+                        end
+                    end
+                end
+                
+                if not isSolid then
+                    local g = currNode.g + d.cost
+                    local h = 10 * (math.abs(nx - endX) + math.abs(ny - endY)) + (14 - 20) * math.min(math.abs(nx - endX), math.abs(ny - endY))
+                    local f = g + h
+                    
+                    local existingNode = nodeGrid[nKey]
+                    if not existingNode or g < existingNode.g then
+                        if not existingNode then
+                            local newNode = {x=nx, y=ny, g=g, f=f, parent=currNode}
+                            table.insert(open, newNode)
+                            nodeGrid[nKey] = newNode
+                        else
+                            existingNode.g = g
+                            existingNode.f = f
+                            existingNode.parent = currNode
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return nil -- Return nil jika sama sekali tidak ada jalan
+end
+
+local function aiMoveTo(endX, endY, moveSpeed, toggleKey)
+    local startX = math.floor(MovementState.Position.X / TILE_SIZE + 0.5)
+    local startY = math.floor(MovementState.Position.Y / TILE_SIZE + 0.5)
+    local path = nil
+    
+    if isLineOfSightClear(startX, startY, endX, endY) then
+        path = { Vector2.new(startX, startY), Vector2.new(endX, endY) }
+    else
+        path = getPath(startX, startY, endX, endY)
+    end
+    
+    if path then
+        for i = 2, #path do
+            if not toggles[toggleKey] then break end
+            local nodePos = Vector3.new(path[i].X, path[i].Y, 0) * TILE_SIZE
+            while toggles[toggleKey] do
+                local currentPos = MovementState.Position
+                local distToNode = (nodePos - currentPos).Magnitude
+                if distToNode < 0.5 then
+                    MovementState.Position = nodePos
+                    break
+                end
+                local dt = task.wait()
+                local dir = (nodePos - currentPos).Unit
+                local step = dir * moveSpeed * dt
+                if step.Magnitude > distToNode then
+                    MovementState.Position = nodePos
+                    break
+                else
+                    MovementState.Position = currentPos + step
+                    MovementState.OldPosition = MovementState.Position
+                    MovementState.VelocityX, MovementState.VelocityY = 0, 0
+                end
+            end
+        end
+        return true
+    end
+    return false
+end
+
+-- ==========================================
+-- LOGIKA LOOP FITUR & MESIN
+-- ==========================================
+task.spawn(function()
+    while task.wait(0.1) do
+        pcall(function()
+            if MovementState then
+                local px = math.floor(MovementState.Position.X / TILE_SIZE + 0.5)
+                local py = math.floor(MovementState.Position.Y / TILE_SIZE + 0.5)
+                posDisplay.Text = string.format("  X: %d, Y: %d", px, py)
+            end
+        end)
+    end
+end)
+
+task.spawn(function()
+    while task.wait() do
+        pcall(function()
+            if toggles.chatSpam then
+                local delayTime = tonumber(spamDelayBox.Text) or 2
+                if delayTime < 0.5 then delayTime = 0.5 end 
+                local msg = spamMsgBox.Text
+                if msg ~= "" then
+                    if CBRemote then CBRemote:FireServer(msg)
+                    else local foundCB = ReplicatedStorage:FindFirstChild("CB"); if foundCB then foundCB:FireServer(msg) end end
+                end
+                task.wait(delayTime)
+            end
+        end)
+    end
+end)
+
+-- ==========================================
+-- SMART AUTO-FARM ENGINE (VISUAL GRID MAPPING)
+-- ==========================================
+local farmPhase = "PLACE"
+local farmIndex = 1
+local farmStartPos = nil
+
+task.spawn(function()
+    while task.wait() do
+        pcall(function()
+            if toggles.smartAutoFarm and MovementState and PlayerFistRemote and PlayerPlaceRemote then
+                
+                if not farmStartPos then
+                    farmStartPos = MovementState.Position
+                end
+                
+                local startPx = math.floor(farmStartPos.X / TILE_SIZE + 0.5)
+                local startPy = math.floor(farmStartPos.Y / TILE_SIZE + 0.5)
+                
+                -- Baca data dari Grid Visual (Farm Tiles)
+                local targetList = {}
+                for key, isSelected in pairs(toggles.farmGrids or {}) do
+                    if isSelected then
+                        local dxStr, dyStr = string.match(key, "([%d%-]+),([%d%-]+)")
+                        if dxStr and dyStr then
+                            local dx, dy = tonumber(dxStr), tonumber(dyStr)
+                            table.insert(targetList, {x = startPx + dx, y = startPy + dy, dx = dx, dy = dy})
+                        end
+                    end
+                end
+                
+                if #targetList > 0 then
+                    -- Mengurutkan target dari Atas ke Bawah, Kiri ke Kanan
+                    table.sort(targetList, function(a, b)
+                        if a.dy == b.dy then return a.dx < b.dx end
+                        return a.dy > b.dy 
+                    end)
+                    
+                    if farmPhase == "PLACE" then
+                        if farmIndex > #targetList then farmIndex = 1 end
+                        local targetX = targetList[farmIndex].x
+                        local targetY = targetList[farmIndex].y
+                        local targetGrid = Vector2.new(targetX, targetY)
+                        
+                        local hasBlock = false
+                        if WorldManager and WorldManager.GetTile then
+                            for l = 1, 5 do
+                                if WorldManager.GetTile(targetX, targetY, l) then
+                                    hasBlock = true
+                                    break
+                                end
+                            end
+                        end
+                        
+                        if not hasBlock then
+                            local targetStringID = string.lower(inputInstances["smartFarmItemBox"] and inputInstances["smartFarmItemBox"].Text or "auto")
+                            if targetStringID == "auto" or targetStringID == "" then
+                                local held = getHeldItem()
+                                if held then targetStringID = held end
+                            end
+                            
+                            local slotIndexToSend = tonumber(targetStringID) 
+                            
+                            if not slotIndexToSend and InventoryModule and InventoryModule.Stacks then
+                                local exactMatch, partialMatch = nil, nil
+                                for i = 1, (InventoryModule.MaxSlots or 100) do
+                                    local stackInfo = InventoryModule.Stacks[i]
+                                    if stackInfo and stackInfo.Id then
+                                        local currentID = string.lower(tostring(stackInfo.Id))
+                                        local baseID = getBaseId(currentID) 
+                                        if baseID == targetStringID or currentID == targetStringID then
+                                            exactMatch = i
+                                            break 
+                                        elseif string.find(currentID, targetStringID) and not partialMatch then
+                                            partialMatch = i
+                                        end
+                                    end
+                                end
+                                slotIndexToSend = exactMatch or partialMatch
+                            end
+                            
+                            if slotIndexToSend then 
+                                PlayerPlaceRemote:FireServer(targetGrid, slotIndexToSend) 
+                            end
+                        end
+                        
+                        farmIndex = farmIndex + 1
+                        if farmIndex > #targetList then
+                            farmPhase = "BREAK"
+                            farmIndex = 1
+                        end
+                        
+                    elseif farmPhase == "BREAK" then
+                        if farmIndex > #targetList then farmIndex = 1 end
+                        local targetX = targetList[farmIndex].x
+                        local targetY = targetList[farmIndex].y
+                        local targetGrid = Vector2.new(targetX, targetY)
+                        
+                        local hasBlock = false
+                        if WorldManager and WorldManager.GetTile then
+                            for l = 1, 5 do
+                                if WorldManager.GetTile(targetX, targetY, l) then
+                                    hasBlock = true
+                                    break
+                                end
+                            end
+                        end
+
+                        if hasBlock then
+                            local hitsToSend = tonumber(inputInstances["smartFarmHitsBox"] and inputInstances["smartFarmHitsBox"].Text) or 25
+                            for i = 1, hitsToSend do PlayerFistRemote:FireServer(targetGrid) end
+                        end
+                        
+                        farmIndex = farmIndex + 1
+                        if farmIndex > #targetList then
+                            local delayBreak = tonumber(inputInstances["smartFarmDelayBox"] and inputInstances["smartFarmDelayBox"].Text) or 0.15
+                            task.wait(delayBreak)
+                            
+                            local allEmpty = true
+                            if WorldManager and WorldManager.GetTile then
+                                for _, tgt in ipairs(targetList) do
+                                    local blockHere = false
+                                    for l = 1, 5 do
+                                        if WorldManager.GetTile(tgt.x, tgt.y, l) then blockHere = true break end
+                                    end
+                                    if blockHere then allEmpty = false break end
+                                end
+                            end
+                            
+                            if allEmpty then
+                                farmPhase = "PLACE"
+                            else
+                                farmPhase = "BREAK" 
+                            end
+                            farmIndex = 1
+                        end
+                    end
+                else
+                    -- Matikan toggle otomatis jika pengguna belum memilih grid apapun
+                    toggles.smartAutoFarm = false
+                    print("[NLight] Harap pilih minimal satu Grid melalui tombol 'Select Farm Tiles'!")
+                    task.wait(1)
+                end
+                
+                local delayBreak = tonumber(inputInstances["smartFarmDelayBox"] and inputInstances["smartFarmDelayBox"].Text) or 0.15
+                if delayBreak > 0 then task.wait(delayBreak) end
+            else
+                farmStartPos = nil
+                farmPhase = "PLACE"
+                farmIndex = 1
+            end
+        end)
+    end
+end)
+
+-- ==========================================
+-- AUTO PLANTER (CUSTOM BASE, KANAN KE KIRI)
+-- ==========================================
+task.spawn(function()
+    while task.wait() do
+        pcall(function()
+            if toggles.autoPlanter and MovementState and PlayerPlaceRemote then
+                local pPos = MovementState.Position
+                local plantStr = string.lower(inputInstances["planterItemBox"] and inputInstances["planterItemBox"].Text or "")
+                local baseStr = string.lower(inputInstances["planterBaseBox"] and inputInstances["planterBaseBox"].Text or "dirt")
+                if plantStr == "" or baseStr == "" then return end
+
+                local slotIndexToSend = tonumber(plantStr)
+                if not slotIndexToSend and InventoryModule and InventoryModule.Stacks then
+                    local exactMatch, partialMatch = nil, nil
+                    for i = 1, (InventoryModule.MaxSlots or 100) do
+                        local stackInfo = InventoryModule.Stacks[i]
+                        if stackInfo and stackInfo.Id and stackInfo.Amount and stackInfo.Amount > 0 then
+                            local currentID = string.lower(tostring(stackInfo.Id))
+                            if currentID == plantStr then exactMatch = i break
+                            elseif string.find(currentID, plantStr) and not partialMatch then partialMatch = i end
+                        end
+                    end
+                    slotIndexToSend = exactMatch or partialMatch
+                end
+
+                if not slotIndexToSend then
+                    print("[NLight] Auto Planter: Item habis atau tidak ditemukan!")
+                    toggles.autoPlanter = false
+                    updatePlanterToggle() 
+                    return
+                end
+
+                local validSpots = {}
+                local minBound = workspace:GetAttribute("WorldMin")
+                local maxBound = workspace:GetAttribute("WorldMax")
+
+                if minBound and maxBound and WorldManager and WorldManager.GetTile then
+                    for x = minBound.X, maxBound.X do
+                        for y = minBound.Y, maxBound.Y do
+                            local tileBelow = WorldManager.GetTile(x, y - 1, 1)
+                            local tileCurrent = WorldManager.GetTile(x, y, 1)
+
+                            local isMatchBase = false
+                            if tileBelow then
+                                if ItemsManager and ItemsManager.ItemsData and ItemsManager.ItemsData[tileBelow] then
+                                    if string.find(string.lower(tostring(ItemsManager.ItemsData[tileBelow].Name)), baseStr) then isMatchBase = true end
+                                elseif string.find(string.lower(tostring(tileBelow)), baseStr) then isMatchBase = true end
+                            end
+
+                            if isMatchBase and not tileCurrent and not blacklistedSpots[x..","..y] then
+                                table.insert(validSpots, {x = x, y = y})
+                            end
+                        end
+                    end
+                end
+
+                if #validSpots > 0 then
+                    local rows = {}
+                    for _, spot in ipairs(validSpots) do
+                        rows[spot.y] = rows[spot.y] or {}
+                        table.insert(rows[spot.y], spot)
+                    end
+
+                    local targetY = validSpots[1].y
+                    local minYDist = math.huge
+                    for y, _ in pairs(rows) do
+                        local yDist = math.abs(pPos.Y - (y * TILE_SIZE))
+                        if yDist < minYDist then
+                            minYDist = yDist
+                            targetY = y
+                        end
+                    end
+
+                    local rowSpots = rows[targetY]
+                    table.sort(rowSpots, function(a, b) return a.x > b.x end) -- Kanan ke Kiri (X terbesar ke terkecil)
+
+                    local targetSpot = rowSpots[1]
+                    local moveSpeed = tonumber(inputInstances["planterSpeedBox"] and inputInstances["planterSpeedBox"].Text or "45") or 45
+                    
+                    if aiMoveTo(targetSpot.x, targetSpot.y, moveSpeed, "autoPlanter") then
+                        PlayerPlaceRemote:FireServer(Vector2.new(targetSpot.x, targetSpot.y), slotIndexToSend)
+                        task.wait(0.1)
+                    else
+                        blacklistedSpots[targetSpot.x..","..targetSpot.y] = true
+                    end
+                end
+            end
+        end)
+    end
+end)
+
+-- ==========================================
+-- AUTO BREAKER (ZIG-ZAG)
+-- ==========================================
+task.spawn(function()
+    while task.wait() do
+        pcall(function()
+            if toggles.autoBreaker and MovementState and PlayerFistRemote then
+                local pPos = MovementState.Position
+                local targetStr = string.lower(inputInstances["breakerTargetBox"] and inputInstances["breakerTargetBox"].Text or "")
+                if targetStr == "" then return end
+
+                local validSpots = {}
+                local minBound = workspace:GetAttribute("WorldMin")
+                local maxBound = workspace:GetAttribute("WorldMax")
+
+                if minBound and maxBound and WorldManager and WorldManager.GetTile then
+                    for x = minBound.X, maxBound.X do
+                        for y = minBound.Y, maxBound.Y do
+                            local tileCurrent = WorldManager.GetTile(x, y, 1)
+                            if tileCurrent and not blacklistedSpots[x..","..y] then
+                                local isMatch = false
+                                if ItemsManager and ItemsManager.ItemsData and ItemsManager.ItemsData[tileCurrent] then
+                                    if string.find(string.lower(tostring(ItemsManager.ItemsData[tileCurrent].Name)), targetStr) then isMatch = true end
+                                elseif string.find(string.lower(tostring(tileCurrent)), targetStr) then isMatch = true end
+
+                                if isMatch then
+                                    table.insert(validSpots, {x = x, y = y})
+                                end
+                            end
+                        end
+                    end
+                end
+
+                if #validSpots > 0 then
+                    local rows = {}
+                    local sortedY = {}
+                    for _, spot in ipairs(validSpots) do
+                        if not rows[spot.y] then
+                            rows[spot.y] = {}
+                            table.insert(sortedY, spot.y)
+                        end
+                        table.insert(rows[spot.y], spot)
+                    end
+
+                    table.sort(sortedY, function(a, b) return a < b end)
+
+                    local targetY = sortedY[1]
+                    local minYDist = math.huge
+                    local yIndex = 1
+                    for i, y in ipairs(sortedY) do
+                        local yDist = math.abs(pPos.Y - (y * TILE_SIZE))
+                        if yDist < minYDist then
+                            minYDist = yDist
+                            targetY = y
+                            yIndex = i
+                        end
+                    end
+
+                    local rowSpots = rows[targetY]
+                    
+                    if yIndex % 2 == 0 then
+                        table.sort(rowSpots, function(a, b) return a.x < b.x end) -- Kiri ke Kanan (Zig-zag balik)
+                    else
+                        table.sort(rowSpots, function(a, b) return a.x > b.x end) -- Kanan ke Kiri (Awal)
+                    end
+
+                    local targetSpot = rowSpots[1]
+                    local moveSpeed = tonumber(inputInstances["breakerSpeedBox"] and inputInstances["breakerSpeedBox"].Text or "45") or 45
+                    
+                    if aiMoveTo(targetSpot.x, targetSpot.y, moveSpeed, "autoBreaker") then
+                        local hitsToSend = toggles.oneHitBreak and (tonumber(inputInstances["hitMultiplierBox"] and inputInstances["hitMultiplierBox"].Text or "25") or 25) or 1
+                        for i = 1, hitsToSend do PlayerFistRemote:FireServer(Vector2.new(targetSpot.x, targetSpot.y)) end
+                        if not toggles.antiLag and PCM and PCM.SpawnHitParticle then PCM.SpawnHitParticle(Vector3.new(targetSpot.x * TILE_SIZE, targetSpot.y * TILE_SIZE, 0)) end
+                        task.wait(0.1)
+                    else
+                        blacklistedSpots[targetSpot.x..","..targetSpot.y] = true
+                    end
+                end
+            end
+        end)
+    end
+end)
+
+-- ==========================================
+-- GENIUS AUTO-LOOT (UNLIMITED & SMART AVOIDANCE)
+-- ==========================================
+task.spawn(function()
+    while task.wait(0.1) do
+        pcall(function()
+            if toggles.autoLoot and MovementState then
+                local pPos = MovementState.Position
+                local dropsFolder = workspace:FindFirstChild("Drops") or workspace:FindFirstChild("DroppedItems") or workspace:FindFirstChild("Items")
+                local itemsToLoot = {}
+                
+                if dropsFolder then
+                    for _, v in ipairs(dropsFolder:GetChildren()) do
+                        if (v:IsA("BasePart") or v:IsA("Model")) and not blacklistedItems[v] then 
+                            table.insert(itemsToLoot, v) 
+                        end
+                    end
+                else
+                    for _, obj in ipairs(workspace:GetChildren()) do
+                        if obj:IsA("BasePart") and not obj:IsDescendantOf(LocalPlayer.Character) and not Players:GetPlayerFromCharacter(obj.Parent) and obj.Size.Y < 3 and not blacklistedItems[obj] then
+                            table.insert(itemsToLoot, obj)
+                        end
+                    end
+                end
+                
+                if #itemsToLoot > 0 then
+                    -- SORTIR ITEM: Dari Jarak Terdekat ke Terjauh (Penting!)
+                    table.sort(itemsToLoot, function(a, b)
+                        local posA = a:IsA("BasePart") and a.Position or (a:IsA("Model") and a.PrimaryPart and a.PrimaryPart.Position) or Vector3.new(9999,9999,9999)
+                        local posB = b:IsA("BasePart") and b.Position or (b:IsA("Model") and b.PrimaryPart and b.PrimaryPart.Position) or Vector3.new(9999,9999,9999)
+                        return (pPos - posA).Magnitude < (pPos - posB).Magnitude
+                    end)
+                    
+                    local moveSpeed = tonumber(lootSpeedBox.Text) or 45
+                    
+                    for _, item in ipairs(itemsToLoot) do
+                        if not toggles.autoLoot then break end
+                        local part = item:IsA("BasePart") and item or (item:IsA("Model") and item.PrimaryPart)
+                        
+                        if part and part.Parent then
+                            local targetPos = part.Position
+                            local endX = math.floor(targetPos.X / TILE_SIZE + 0.5)
+                            local endY = math.floor(targetPos.Y / TILE_SIZE + 0.5)
+                            
+                            -- Pengecekan Cerdas: Jangan ambil jika item diluar batas, atau "TERPERANGKAP" di dalam block
+                            if isOutOfBounds(endX, endY) or isItemTrapped(endX, endY) then
+                                blacklistedItems[item] = true
+                            else
+                                if not aiMoveTo(endX, endY, moveSpeed, "autoLoot") then
+                                    -- Jika tidak ada jalan yang ditemukan oleh A*, blacklist itemnya agar tidak memaksa
+                                    blacklistedItems[item] = true
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end)
+    end
+end)
+
+-- ==========================================
+-- ENGINE INPUTS & RENDER LOOP
+-- ==========================================
+UIS.InputBegan:Connect(function(input, gpe)
+    if input.KeyCode == Enum.KeyCode.Space then isHoldingSpace = true end
+    if gpe then return end 
+    local isTouchOrClick = (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton3)
+    
+    if isTouchOrClick then
+        pcall(function()
+            if toggles.devTeleport and MovementState then
+                local targetGrid = getGridFromScreen(input.Position.X, input.Position.Y)
+                if targetGrid then
+                    local newPos = Vector3.new(targetGrid.X, targetGrid.Y, 0) * TILE_SIZE
+                    MovementState.Position = newPos
+                    MovementState.OldPosition = newPos
+                    MovementState.VelocityX, MovementState.VelocityY = 0, 0
+                end
+                return 
+            end
+        end)
+    end
+end)
+
+UIS.InputEnded:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.Space then isHoldingSpace = false end
+end)
+
+RS.RenderStepped:Connect(function()
+    pcall(function()
+        if toggles.godMode and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then LocalPlayer.Character.Humanoid.Health = LocalPlayer.Character.Humanoid.MaxHealth end
+        if MovementState then
+            if toggles.speed and MovementState.MoveX ~= 0 then MovementState.VelocityX = MovementState.MoveX * (tonumber(speedBox.Text) or 2.0) end
+            if toggles.infJump then MovementState.RemainingJumps = 999; MovementState.MaxJump = 999 end
+            if toggles.fly then 
+                MovementState.VelocityY = 0
+                if isHoldingSpace then 
+                    MovementState.Position = MovementState.Position + Vector3.new(0, 0.4, 0) 
+                end 
+            end
+        end
+    end)
+end)
+
+local function toggleMenu() frame.Visible = not frame.Visible; openBtn.Visible = not frame.Visible end
+minBtn.MouseButton1Click:Connect(toggleMenu); openBtn.MouseButton1Click:Connect(toggleMenu)
