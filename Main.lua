@@ -111,7 +111,7 @@ local gui = Instance.new("ScreenGui", LocalPlayer.PlayerGui)
 gui.Name = "NLightModern"
 gui.ResetOnSpawn = false
 gui.IgnoreGuiInset = true 
-gui.DisplayOrder = 2147483647 -- Memaksa UI ini berada di atas semua UI bawaan game (Nilai Max)
+gui.DisplayOrder = 2147483647 
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Global
 
 local Theme = {
@@ -230,7 +230,8 @@ local function createLabelDisplay(text, parent)
     return lbl
 end
 
-local function createInventoryDropdown(labelTxt, stateKey, parent, callback)
+-- UPDATE PENTING: MENAMBAHKAN PARAMETER filterFunc
+local function createInventoryDropdown(labelTxt, stateKey, parent, callback, filterFunc)
     local container = Instance.new("Frame", parent)
     container.Size = UDim2.new(0.92, 0, 0, 40); container.BackgroundColor3 = Theme.Item; container.ClipsDescendants = true; container.ZIndex = 6; Instance.new("UICorner", container).CornerRadius = UDim.new(0, 6)
     local lbl = Instance.new("TextLabel", container); lbl.Size = UDim2.new(0.5, 0, 0, 40); lbl.Position = UDim2.new(0, 15, 0, 0); lbl.BackgroundTransparency = 1; lbl.Text = labelTxt; lbl.TextColor3 = Theme.Text; lbl.Font = Enum.Font.GothamMedium; lbl.TextSize = 13; lbl.TextXAlignment = Enum.TextXAlignment.Left; lbl.ZIndex = 6
@@ -251,7 +252,17 @@ local function createInventoryDropdown(labelTxt, stateKey, parent, callback)
                     if stackInfo and stackInfo.Id and stackInfo.Amount and stackInfo.Amount > 0 then
                         local itemId = tostring(stackInfo.Id)
                         local itemName = ItemsManager and ItemsManager.ItemsData and ItemsManager.ItemsData[itemId] and ItemsManager.ItemsData[itemId].Name or itemId
-                        if not addedItems[itemName] then table.insert(rawItems, itemName); addedItems[itemName] = true end
+                        
+                        -- CEK FILTER FUNC DISINI
+                        local isAllowed = true
+                        if filterFunc then
+                            isAllowed = filterFunc(string.lower(itemName), string.lower(itemId))
+                        end
+                        
+                        if isAllowed and not addedItems[itemName] then 
+                            table.insert(rawItems, itemName)
+                            addedItems[itemName] = true 
+                        end
                     end
                 end
             end
@@ -269,13 +280,12 @@ local function createInventoryDropdown(labelTxt, stateKey, parent, callback)
 end
 
 -- ==========================================
--- POPUP GRID UI (DIPERBESAR MENJADI 8x8)
+-- POPUP GRID UI (8x8)
 -- ==========================================
 local popupOverlay = Instance.new("Frame", gui)
 popupOverlay.Size = UDim2.new(1, 0, 1, 0); popupOverlay.BackgroundColor3 = Color3.new(0, 0, 0); popupOverlay.BackgroundTransparency = 0.5; popupOverlay.Visible = false; popupOverlay.Active = true; popupOverlay.ZIndex = 100
 
 local gridPopup = Instance.new("Frame", popupOverlay)
--- Ukuran popup sedikit diperbesar agar muat 64 kotak (8x8)
 gridPopup.Size = UDim2.new(0, 320, 0, 420); gridPopup.Position = UDim2.new(0.5, -160, 0.5, -210); gridPopup.BackgroundColor3 = Theme.Background; gridPopup.ZIndex = 101; Instance.new("UICorner", gridPopup).CornerRadius = UDim.new(0, 12); Instance.new("UIStroke", gridPopup).Color = Theme.Border
 
 local gridHeader = Instance.new("Frame", gridPopup)
@@ -288,14 +298,11 @@ local gridCloseBtn = Instance.new("TextButton", gridHeader)
 gridCloseBtn.Size = UDim2.new(0, 50, 0, 50); gridCloseBtn.Position = UDim2.new(1, -50, 0, 0); gridCloseBtn.BackgroundTransparency = 1; gridCloseBtn.Text = "✕"; gridCloseBtn.Font = Enum.Font.GothamBold; gridCloseBtn.TextSize = 14; gridCloseBtn.TextColor3 = Theme.TextMuted; gridCloseBtn.ZIndex = 102; gridCloseBtn.MouseButton1Click:Connect(function() popupOverlay.Visible = false end)
 
 local gridContainer = Instance.new("Frame", gridPopup)
--- Menyesuaikan lebar container untuk 8 kolom
 gridContainer.Size = UDim2.new(0, 284, 0, 284); gridContainer.Position = UDim2.new(0.5, -142, 0, 55); gridContainer.BackgroundTransparency = 1; gridContainer.ZIndex = 102
 
 local uigrid = Instance.new("UIGridLayout", gridContainer)
--- Mengecilkan sel dari 45x45 menjadi 32x32 agar muat 8 baris & kolom
 uigrid.CellSize = UDim2.new(0, 32, 0, 32); uigrid.CellPadding = UDim2.new(0, 4, 0, 4); uigrid.SortOrder = Enum.SortOrder.LayoutOrder
 
--- Loop 64 kali untuk membuat grid 8x8
 for i = 1, 64 do
     local dx = (i - 1) % 8 - 3
     local row = math.floor((i - 1) / 8)
@@ -305,7 +312,6 @@ for i = 1, 64 do
     local btn = Instance.new("TextButton", gridContainer)
     btn.Text = ""; btn.BackgroundColor3 = toggles.farmGrids[key] and Theme.Orange or Theme.Item; btn.ZIndex = 103; Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
     
-    -- Menandai posisi tengah karakter (I'M HERE / ME)
     if dx == 0 and dy == 0 then
         local userPenanda = Instance.new("Frame", btn)
         userPenanda.Size = UDim2.new(0, 28, 0, 28); userPenanda.Position = UDim2.new(0.5, 0, 0.5, 0); userPenanda.AnchorPoint = Vector2.new(0.5, 0.5); userPenanda.BackgroundColor3 = Theme.Orange; userPenanda.BackgroundTransparency = 0.5; userPenanda.ZIndex = 104; Instance.new("UICorner", userPenanda).CornerRadius = UDim.new(1, 0)
@@ -332,7 +338,7 @@ local pageMisc = createTab("Misc")
 tabButtons[1].TextColor3 = Theme.Text; pageMove.Visible = true; task.spawn(function() task.wait(0.1); activeIndicator.Position = UDim2.new(0, tabButtons[1].AbsolutePosition.X - frame.AbsolutePosition.X, 0, 85); activeIndicator.Size = UDim2.new(0, tabButtons[1].AbsoluteSize.X, 0, 3) end)
 
 -- ==========================================
--- PATHFINDING CORE (DIWARISKAN KE MODULES)
+-- PATHFINDING CORE
 -- ==========================================
 local blacklistedItems, blacklistedSpots, passableTilesCache, solidTilesCache = {}, {}, {}, {}
 task.spawn(function() while task.wait(5) do blacklistedSpots = {}; blacklistedItems = {}; passableTilesCache = {}; solidTilesCache = {} end end)
@@ -437,7 +443,7 @@ local Core = {
     UI = { createSection = createSection, createToggle = createToggle, createInputRow = createInputRow, createDropdown = createDropdown, createInventoryDropdown = createInventoryDropdown, createButton = createButton, createLabelDisplay = createLabelDisplay, popupOverlay = popupOverlay },
     Utils = { TILE_SIZE = TILE_SIZE, getGridFromScreen = getGridFromScreen, getBaseId = getBaseId, getHeldItem = getHeldItem },
     Pathfinding = { aiMoveTo = aiMoveTo, isOutOfBounds = isOutOfBounds, isItemTrapped = isItemTrapped, blacklistedItems = blacklistedItems, blacklistedSpots = blacklistedSpots },
-    Pages = { Move = pageMove, Farm = pageFarm, World = pageWorld, Misc = pageMisc } -- TAMBAHKAN Pabrik DI SINI
+    Pages = { Move = pageMove, Farm = pageFarm, World = pageWorld, Misc = pageMisc }
 }
 
 -- [!] GANTI URL DI BAWAH INI DENGAN RAW URL GITHUB REPOSITORY KAMU
