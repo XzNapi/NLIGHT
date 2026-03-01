@@ -329,6 +329,7 @@ local pageMove = createTab("Move")
 local pageFarm = createTab("Farm")
 local pageWorld = createTab("World")
 local pageMisc = createTab("Misc")
+local pagePabrik = createTab("Pabrik")
 tabButtons[1].TextColor3 = Theme.Text; pageMove.Visible = true; task.spawn(function() task.wait(0.1); activeIndicator.Position = UDim2.new(0, tabButtons[1].AbsolutePosition.X - frame.AbsolutePosition.X, 0, 85); activeIndicator.Size = UDim2.new(0, tabButtons[1].AbsoluteSize.X, 0, 3) end)
 
 -- ==========================================
