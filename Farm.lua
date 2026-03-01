@@ -24,10 +24,83 @@ return function(Core)
     Core.UI.createToggle("Radar Item Drop", "itemRadar", secLoot, false)
     Core.UI.createToggle("Enable Auto-Loot", "autoLoot", secLoot, false) 
 
+    -- FITUR BARU: AUTO DROP ITEM
+    local secDrop = Core.UI.createSection(Core.Pages.Farm, "Auto Drop Item")
+    Core.UI.createInventoryDropdown("Select Item", "dropItemSelect", secDrop)
+    local dropAmtBox = Core.UI.createInputRow("Amount to Drop", "1", secDrop, 0.35, "dropAmountBox")
+    
+    local function getDropRemote()
+        local remotes = Core.ReplicatedStorage:FindFirstChild("Remotes")
+        if remotes then
+            return remotes:FindFirstChild("PlayerDropItem") or remotes:FindFirstChild("PlayerDrop") or remotes:FindFirstChild("DropItem")
+        end
+        return nil
+    end
+
+    Core.UI.createButton("Drop Specified Amount", secDrop, function()
+        local remote = getDropRemote()
+        if not remote then print("[NLight] Drop Remote tidak ditemukan!") return end
+        local targetStr = string.lower(Core.Toggles.dropItemSelect or "auto")
+        if targetStr == "auto" or targetStr == "" then targetStr = Core.Utils.getHeldItem() end
+        if not targetStr then return end
+
+        local amtToDrop = tonumber(dropAmtBox.Text) or 1
+        
+        if Core.Managers.InventoryModule and Core.Managers.InventoryModule.Stacks then
+            for i = 1, (Core.Managers.InventoryModule.MaxSlots or 100) do
+                if amtToDrop <= 0 then break end
+                local stackInfo = Core.Managers.InventoryModule.Stacks[i]
+                if stackInfo and stackInfo.Id and stackInfo.Amount and stackInfo.Amount > 0 then
+                    local currentID = string.lower(tostring(stackInfo.Id))
+                    local itemName = currentID
+                    if Core.Managers.ItemsManager and Core.Managers.ItemsManager.ItemsData and Core.Managers.ItemsManager.ItemsData[tostring(stackInfo.Id)] then
+                        itemName = string.lower(tostring(Core.Managers.ItemsManager.ItemsData[tostring(stackInfo.Id)].Name or currentID))
+                    end
+                    if currentID == targetStr or itemName == targetStr then
+                        local dropNow = math.min(amtToDrop, stackInfo.Amount)
+                        remote:FireServer(i, dropNow)
+                        amtToDrop = amtToDrop - dropNow
+                        task.wait(0.05)
+                    end
+                end
+            end
+        end
+    end)
+
+    Core.UI.createButton("Drop ALL of Selected", secDrop, function()
+        local remote = getDropRemote()
+        if not remote then print("[NLight] Drop Remote tidak ditemukan!") return end
+        local targetStr = string.lower(Core.Toggles.dropItemSelect or "auto")
+        if targetStr == "auto" or targetStr == "" then targetStr = Core.Utils.getHeldItem() end
+        if not targetStr then return end
+
+        if Core.Managers.InventoryModule and Core.Managers.InventoryModule.Stacks then
+            for i = 1, (Core.Managers.InventoryModule.MaxSlots or 100) do
+                local stackInfo = Core.Managers.InventoryModule.Stacks[i]
+                if stackInfo and stackInfo.Id and stackInfo.Amount and stackInfo.Amount > 0 then
+                    local currentID = string.lower(tostring(stackInfo.Id))
+                    local itemName = currentID
+                    if Core.Managers.ItemsManager and Core.Managers.ItemsManager.ItemsData and Core.Managers.ItemsManager.ItemsData[tostring(stackInfo.Id)] then
+                        itemName = string.lower(tostring(Core.Managers.ItemsManager.ItemsData[tostring(stackInfo.Id)].Name or currentID))
+                    end
+                    if currentID == targetStr or itemName == targetStr then
+                        remote:FireServer(i, stackInfo.Amount) -- Langsung drop semua isi slot ini
+                        task.wait(0.05)
+                    end
+                end
+            end
+        end
+    end)
+    Core.UI.createToggle("Enable Auto Drop (Loop)", "autoDrop", secDrop, false)
+
+    -- =========================================================================
+    -- LOGIC & ENGINE
+    -- =========================================================================
+
     -- SMART AUTO FARM ENGINE (AI STATE MACHINE)
-    local farmPhase = "PLACE" -- Siklus dijamin mulai dari menanam
+    local farmPhase = "PLACE" 
     local farmStartPos = nil
-    local isOutOfItems = false -- Variabel penanda apakah item habis
+    local isOutOfItems = false 
 
     task.spawn(function()
         while task.wait() do
@@ -35,7 +108,7 @@ return function(Core)
                 if Core.Toggles.smartAutoFarm and Core.Managers.MovementState and Core.Remotes.PlayerFistRemote and Core.Remotes.PlayerPlaceRemote then
                     local char = Core.LocalPlayer.Character
                     local hrp = char and (char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart)
-                    if hrp and not hrp.Anchored then hrp.Anchored = true end -- Kunci Visual Karakter
+                    if hrp and not hrp.Anchored then hrp.Anchored = true end 
                     
                     if not farmStartPos then farmStartPos = Core.Managers.MovementState.Position end
                     local startPx = math.floor(farmStartPos.X / Core.Utils.TILE_SIZE + 0.5)
@@ -57,7 +130,6 @@ return function(Core)
                         -- FASE 1: PLACE ITEM (DARI KANAN KE KIRI)
                         -- ==========================================================
                         if farmPhase == "PLACE" then
-                            -- Urutkan Target: Kanan ke Kiri (X Terbesar ke Terkecil)
                             table.sort(targetList, function(a, b)
                                 if a.dy == b.dy then return a.dx > b.dx end
                                 return a.dy > b.dy 
@@ -103,7 +175,7 @@ return function(Core)
                                     
                                     if slotIndexToSend then 
                                         Core.Remotes.PlayerPlaceRemote:FireServer(targetGrid, slotIndexToSend)
-                                        task.wait(0.05) -- Tanam mengalir mulus dengan cepat
+                                        task.wait(0.05) 
                                     else
                                         itemHabis = true
                                         break
@@ -111,13 +183,11 @@ return function(Core)
                                 end
                             end
                             
-                            -- JIKA ITEM HABIS, LANJUTKAN KE BREAK LALU LOOT SEBAGAI SIKLUS TERAKHIR
                             if itemHabis then
                                 print("[NLight] Smart Auto-Farm: Item habis! Masuk ke fase panen terakhir...")
                                 isOutOfItems = true
                                 farmPhase = "BREAK"
                             else
-                                -- Jika sukses sweep Kanan-Kiri, lanjut ke fase Break
                                 farmPhase = "BREAK"
                             end
 
@@ -125,7 +195,6 @@ return function(Core)
                         -- FASE 2: BREAK ITEM (DARI KANAN KE KIRI - SATU PER SATU)
                         -- ==========================================================
                         elseif farmPhase == "BREAK" then
-                            -- Urutkan Target: Kanan ke Kiri (X Terbesar ke Terkecil)
                             table.sort(targetList, function(a, b)
                                 if a.dy == b.dy then return a.dx > b.dx end
                                 return a.dy > b.dy 
@@ -145,20 +214,14 @@ return function(Core)
                                 end
 
                                 if hasBlock then
-                                    -- Bot memukul target INI secara spesifik
                                     local hitsToSend = 25 
                                     for j = 1, hitsToSend do Core.Remotes.PlayerFistRemote:FireServer(targetGrid) end
-                                    
                                     task.wait(delayBreakMs / 1000)
                                     brokeAny = true
-                                    
-                                    -- STOP LOOP DI SINI (BREAK INNER LOOP). 
-                                    -- AI Akan fokus menghancurkan SATU blok ini sampai hancur lebur sebelum maju ke blok di sebelahnya.
                                     break 
                                 end
                             end
 
-                            -- JIKA SEMUA GRID SUDAH HANCUR (KOSONG) -> MASUK FASE LOOT
                             if not brokeAny then
                                 farmPhase = "LOOT"
                             end
@@ -167,7 +230,7 @@ return function(Core)
                         -- FASE 3: LOOT ITEM (DARI KIRI KE KANAN)
                         -- ==========================================================
                         elseif farmPhase == "LOOT" then
-                            task.wait(0.3) -- Tunggu server merender drop item sejenak
+                            task.wait(0.3) 
 
                             local dropsFolder = workspace:FindFirstChild("Drops") or workspace:FindFirstChild("DroppedItems") or workspace:FindFirstChild("Items")
                             local itemsToLoot = {}
@@ -182,7 +245,6 @@ return function(Core)
                             local didLoot = false
 
                             if #itemsToLoot > 0 then
-                                -- URUTKAN DROP ITEM DARI KIRI KE KANAN (X Terkecil ke X Terbesar)
                                 table.sort(itemsToLoot, function(a, b)
                                     local posA = a:IsA("BasePart") and a.Position or (a:IsA("Model") and a.PrimaryPart and a.PrimaryPart.Position) or Vector3.new(9999,9999,9999)
                                     local posB = b:IsA("BasePart") and b.Position or (b:IsA("Model") and b.PrimaryPart and b.PrimaryPart.Position) or Vector3.new(9999,9999,9999)
@@ -199,7 +261,6 @@ return function(Core)
                                         local endY = math.floor(part.Position.Y / Core.Utils.TILE_SIZE + 0.5)
                                         local distFromStart = math.sqrt((endX - startPx)^2 + (endY - startPy)^2)
                                         
-                                        -- Mengambil item yang ada di radius lahan grid (maks radius 15)
                                         if distFromStart <= 15 and not Core.Pathfinding.isOutOfBounds(endX, endY) and not Core.Pathfinding.isItemTrapped(endX, endY) then
                                             Core.Pathfinding.aiMoveTo(endX, endY, moveSpeed, "smartAutoFarm")
                                             didLoot = true
@@ -208,14 +269,12 @@ return function(Core)
                                 end
                                 
                                 if didLoot and Core.Toggles.smartAutoFarm then
-                                    -- KEMBALI KE POSISI TENGAH SETELAH LOOT
                                     Core.Pathfinding.aiMoveTo(startPx, startPy, moveSpeed, "smartAutoFarm")
                                     Core.Managers.MovementState.Position = farmStartPos
                                     Core.Managers.MovementState.OldPosition = farmStartPos
                                 end
                             end
                             
-                            -- CEK APAKAH ITEM HABIS DI FASE PLACE SEBELUMNYA
                             if isOutOfItems then
                                 print("[NLight] Smart Auto-Farm: Siklus terakhir selesai. Bot dimatikan.")
                                 Core.Toggles.smartAutoFarm = false
@@ -225,7 +284,6 @@ return function(Core)
                                 isOutOfItems = false
                                 if hrp and hrp.Anchored then hrp.Anchored = false end
                             else
-                                -- FASE LOOT SELESAI, RESTART SIKLUS KE PLACE
                                 farmPhase = "PLACE"
                             end
                         end
@@ -236,7 +294,6 @@ return function(Core)
                         task.wait(1)
                     end
                 else
-                    -- KETIKA TOGGLE DIMATIKAN: Reset Otak AI dan Un-Anchor
                     farmStartPos = nil
                     farmPhase = "PLACE"
                     isOutOfItems = false
@@ -418,6 +475,39 @@ return function(Core)
                                     Core.Pathfinding.blacklistedItems[item] = true
                                 else
                                     if not Core.Pathfinding.aiMoveTo(endX, endY, moveSpeed, "autoLoot") then Core.Pathfinding.blacklistedItems[item] = true end
+                                end
+                            end
+                        end
+                    end
+                end
+            end)
+        end
+    end)
+    
+    -- LOOP AUTO DROP
+    task.spawn(function()
+        while task.wait(0.5) do
+            pcall(function()
+                if Core.Toggles.autoDrop then
+                    local remote = getDropRemote()
+                    if not remote then return end
+                    
+                    local targetStr = string.lower(Core.Toggles.dropItemSelect or "auto")
+                    if targetStr == "auto" or targetStr == "" then targetStr = Core.Utils.getHeldItem() end
+                    if not targetStr then return end
+
+                    if Core.Managers.InventoryModule and Core.Managers.InventoryModule.Stacks then
+                        for i = 1, (Core.Managers.InventoryModule.MaxSlots or 100) do
+                            local stackInfo = Core.Managers.InventoryModule.Stacks[i]
+                            if stackInfo and stackInfo.Id and stackInfo.Amount and stackInfo.Amount > 0 then
+                                local currentID = string.lower(tostring(stackInfo.Id))
+                                local itemName = currentID
+                                if Core.Managers.ItemsManager and Core.Managers.ItemsManager.ItemsData and Core.Managers.ItemsManager.ItemsData[tostring(stackInfo.Id)] then
+                                    itemName = string.lower(tostring(Core.Managers.ItemsManager.ItemsData[tostring(stackInfo.Id)].Name or currentID))
+                                end
+                                if currentID == targetStr or itemName == targetStr then
+                                    remote:FireServer(i, stackInfo.Amount)
+                                    task.wait(0.1)
                                 end
                             end
                         end
