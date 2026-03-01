@@ -22,6 +22,7 @@ return function(Core)
     Core.UI.createToggle("Hide Player Names", "hideNames", secVisual, false)
 
     local secAdmin = Core.UI.createSection(Core.Pages.Misc, "Admin & Security")
+    -- Mod Detector (Auto-Disconnect)
     Core.UI.createToggle("Mod Detector (Auto-Disconnect)", "modDetector", secAdmin, true)
     Core.UI.createToggle("Fake VIP (Cosmetic)", "fakeVip", secAdmin, false, function(state)
         pcall(function()
@@ -86,20 +87,21 @@ return function(Core)
         end
     end)
 
-    -- [SISTEM CHAT SPAM DENGAN BYPASS ANTI-SPAM]
-    local spamCounter = 0 -- Variabel penghitung angka
-
+    -- [SISTEM CHAT SPAM - ANTI SENSOR BYPASS]
+    local spamCounter = 0 -- Inisialisasi angka awal
+    
     task.spawn(function()
         while task.wait() do
             pcall(function()
                 if Core.Toggles.chatSpam then
                     local delayTime = tonumber(Core.Inputs["spamDelayBox"] and Core.Inputs["spamDelayBox"].Text) or 2
                     if delayTime < 0.5 then delayTime = 0.5 end 
+                    
                     local baseMsg = Core.Inputs["spamMsgBox"] and Core.Inputs["spamMsgBox"].Text or ""
                     
                     if baseMsg ~= "" then
-                        -- Menggabungkan pesan dengan angka di belakangnya
-                        local finalMsg = baseMsg .. " [" .. tostring(spamCounter) .. "]"
+                        -- Menggabungkan teks asli dengan angka berputar
+                        local finalMsg = baseMsg .. " " .. tostring(spamCounter)
                         
                         if Core.Remotes.CBRemote then 
                             Core.Remotes.CBRemote:FireServer(finalMsg)
@@ -107,11 +109,11 @@ return function(Core)
                             local foundCB = Core.ReplicatedStorage:FindFirstChild("CB")
                             if foundCB then foundCB:FireServer(finalMsg) end 
                         end
-
-                        -- Logika penambahan angka dan reset
+                        
+                        -- Logika putaran angka: Tambah 1, jika lewat dari 10 kembali ke 0
                         spamCounter = spamCounter + 1
                         if spamCounter > 10 then
-                            spamCounter = 0 -- Kembali ke 0 setelah mencapai 10
+                            spamCounter = 0
                         end
                     end
                     task.wait(delayTime)
