@@ -111,6 +111,8 @@ local gui = Instance.new("ScreenGui", LocalPlayer.PlayerGui)
 gui.Name = "NLightModern"
 gui.ResetOnSpawn = false
 gui.IgnoreGuiInset = true 
+gui.DisplayOrder = 2147483647 -- Memaksa UI ini berada di atas semua UI bawaan game (Nilai Max)
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Global
 
 local Theme = {
     Background = Color3.fromRGB(13, 13, 17), Surface = Color3.fromRGB(22, 22, 28), Item = Color3.fromRGB(30, 30, 38), Border = Color3.fromRGB(45, 45, 55),
@@ -120,39 +122,40 @@ local Theme = {
 
 local frame = Instance.new("Frame", gui)
 frame.Size = UDim2.new(0, 380, 0, 380); frame.Position = UDim2.new(0.05, 0, 0.2, 0); frame.BackgroundColor3 = Theme.Background; frame.Active = true; frame.Draggable = true; frame.BorderSizePixel = 0
+frame.ZIndex = 1
 Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 12); Instance.new("UIStroke", frame).Color = Theme.Border
 
 local titleBar = Instance.new("Frame", frame)
-titleBar.Size = UDim2.new(1, 0, 0, 50); titleBar.BackgroundTransparency = 1
+titleBar.Size = UDim2.new(1, 0, 0, 50); titleBar.BackgroundTransparency = 1; titleBar.ZIndex = 2
 local title = Instance.new("TextLabel", titleBar)
-title.Text = "NLIGHT"; title.Font = Enum.Font.GothamBlack; title.TextSize = 18; title.TextColor3 = Theme.Text; title.BackgroundTransparency = 1; title.Size = UDim2.new(1, -20, 1, 0); title.Position = UDim2.new(0, 20, 0, 0); title.TextXAlignment = Enum.TextXAlignment.Left
+title.Text = "NLIGHT"; title.Font = Enum.Font.GothamBlack; title.TextSize = 18; title.TextColor3 = Theme.Text; title.BackgroundTransparency = 1; title.Size = UDim2.new(1, -20, 1, 0); title.Position = UDim2.new(0, 20, 0, 0); title.TextXAlignment = Enum.TextXAlignment.Left; title.ZIndex = 2
 
 local closeBtn = Instance.new("TextButton", titleBar)
-closeBtn.Text = "✕"; closeBtn.Font = Enum.Font.GothamBold; closeBtn.TextSize = 14; closeBtn.Size = UDim2.new(0, 50, 1, 0); closeBtn.Position = UDim2.new(1, -50, 0, 0); closeBtn.BackgroundTransparency = 1; closeBtn.TextColor3 = Theme.TextMuted
+closeBtn.Text = "✕"; closeBtn.Font = Enum.Font.GothamBold; closeBtn.TextSize = 14; closeBtn.Size = UDim2.new(0, 50, 1, 0); closeBtn.Position = UDim2.new(1, -50, 0, 0); closeBtn.BackgroundTransparency = 1; closeBtn.TextColor3 = Theme.TextMuted; closeBtn.ZIndex = 2
 closeBtn.MouseButton1Click:Connect(function() gui:Destroy() end)
 local minBtn = Instance.new("TextButton", titleBar)
-minBtn.Text = "—"; minBtn.Font = Enum.Font.GothamBold; minBtn.TextSize = 14; minBtn.Size = UDim2.new(0, 50, 1, 0); minBtn.Position = UDim2.new(1, -90, 0, 0); minBtn.BackgroundTransparency = 1; minBtn.TextColor3 = Theme.TextMuted
+minBtn.Text = "—"; minBtn.Font = Enum.Font.GothamBold; minBtn.TextSize = 14; minBtn.Size = UDim2.new(0, 50, 1, 0); minBtn.Position = UDim2.new(1, -90, 0, 0); minBtn.BackgroundTransparency = 1; minBtn.TextColor3 = Theme.TextMuted; minBtn.ZIndex = 2
 
 local openBtn = Instance.new("TextButton", gui)
-openBtn.Size = UDim2.new(0, 45, 0, 45); openBtn.Position = UDim2.new(0.02, 0, 0.5, 0); openBtn.BackgroundColor3 = Theme.Surface; openBtn.Text = "NL"; openBtn.Font = Enum.Font.GothamBlack; openBtn.TextSize = 14; openBtn.TextColor3 = Theme.Accent; openBtn.Visible = false; openBtn.Active = true; openBtn.Draggable = true; Instance.new("UICorner", openBtn).CornerRadius = UDim.new(1, 0); Instance.new("UIStroke", openBtn).Color = Theme.Border
+openBtn.Size = UDim2.new(0, 45, 0, 45); openBtn.Position = UDim2.new(0.02, 0, 0.5, 0); openBtn.BackgroundColor3 = Theme.Surface; openBtn.Text = "NL"; openBtn.Font = Enum.Font.GothamBlack; openBtn.TextSize = 14; openBtn.TextColor3 = Theme.Accent; openBtn.Visible = false; openBtn.Active = true; openBtn.Draggable = true; openBtn.ZIndex = 1; Instance.new("UICorner", openBtn).CornerRadius = UDim.new(1, 0); Instance.new("UIStroke", openBtn).Color = Theme.Border
 
 local tabBar = Instance.new("ScrollingFrame", frame)
-tabBar.Size = UDim2.new(1, -40, 0, 35); tabBar.Position = UDim2.new(0, 20, 0, 50); tabBar.BackgroundTransparency = 1; tabBar.ScrollBarThickness = 0; tabBar.CanvasSize = UDim2.new(0, 0, 0, 0); tabBar.AutomaticCanvasSize = Enum.AutomaticSize.X
+tabBar.Size = UDim2.new(1, -40, 0, 35); tabBar.Position = UDim2.new(0, 20, 0, 50); tabBar.BackgroundTransparency = 1; tabBar.ScrollBarThickness = 0; tabBar.CanvasSize = UDim2.new(0, 0, 0, 0); tabBar.AutomaticCanvasSize = Enum.AutomaticSize.X; tabBar.ZIndex = 2
 local tabLayout = Instance.new("UIListLayout", tabBar); tabLayout.FillDirection = Enum.FillDirection.Horizontal; tabLayout.SortOrder = Enum.SortOrder.LayoutOrder; tabLayout.Padding = UDim.new(0, 20)
 
 local tabPages, tabButtons = {}, {}
 local contentArea = Instance.new("Frame", frame)
-contentArea.Size = UDim2.new(1, 0, 1, -100); contentArea.Position = UDim2.new(0, 0, 0, 100); contentArea.BackgroundTransparency = 1
+contentArea.Size = UDim2.new(1, 0, 1, -100); contentArea.Position = UDim2.new(0, 0, 0, 100); contentArea.BackgroundTransparency = 1; contentArea.ZIndex = 2
 local activeIndicator = Instance.new("Frame", frame)
-activeIndicator.Size = UDim2.new(0, 30, 0, 3); activeIndicator.BackgroundColor3 = Theme.Accent; activeIndicator.BorderSizePixel = 0; activeIndicator.Position = UDim2.new(0, 20, 0, 85); Instance.new("UICorner", activeIndicator).CornerRadius = UDim.new(1,0)
+activeIndicator.Size = UDim2.new(0, 30, 0, 3); activeIndicator.BackgroundColor3 = Theme.Accent; activeIndicator.BorderSizePixel = 0; activeIndicator.Position = UDim2.new(0, 20, 0, 85); activeIndicator.ZIndex = 2; Instance.new("UICorner", activeIndicator).CornerRadius = UDim.new(1,0)
 
 local function createTab(name)
     local tabBtn = Instance.new("TextButton", tabBar)
-    tabBtn.Size = UDim2.new(0, 0, 1, 0); tabBtn.AutomaticSize = Enum.AutomaticSize.X; tabBtn.Text = string.upper(name); tabBtn.Font = Enum.Font.GothamBold; tabBtn.TextSize = 12; tabBtn.BackgroundTransparency = 1; tabBtn.TextColor3 = Theme.TextMuted
+    tabBtn.Size = UDim2.new(0, 0, 1, 0); tabBtn.AutomaticSize = Enum.AutomaticSize.X; tabBtn.Text = string.upper(name); tabBtn.Font = Enum.Font.GothamBold; tabBtn.TextSize = 12; tabBtn.BackgroundTransparency = 1; tabBtn.TextColor3 = Theme.TextMuted; tabBtn.ZIndex = 2
     table.insert(tabButtons, tabBtn)
 
     local tabPage = Instance.new("ScrollingFrame", contentArea)
-    tabPage.Size = UDim2.new(1, 0, 1, 0); tabPage.CanvasSize = UDim2.new(0, 0, 0, 0); tabPage.AutomaticCanvasSize = Enum.AutomaticSize.Y; tabPage.BackgroundTransparency = 1; tabPage.ScrollBarThickness = 4; tabPage.ScrollBarImageColor3 = Theme.Border; tabPage.Visible = false
+    tabPage.Size = UDim2.new(1, 0, 1, 0); tabPage.CanvasSize = UDim2.new(0, 0, 0, 0); tabPage.AutomaticCanvasSize = Enum.AutomaticSize.Y; tabPage.BackgroundTransparency = 1; tabPage.ScrollBarThickness = 4; tabPage.ScrollBarImageColor3 = Theme.Border; tabPage.Visible = false; tabPage.ZIndex = 2
     local pageLayout = Instance.new("UIListLayout", tabPage); pageLayout.Padding = UDim.new(0, 15); pageLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
     Instance.new("UIPadding", tabPage).PaddingTop = UDim.new(0, 5); Instance.new("UIPadding", tabPage).PaddingBottom = UDim.new(0, 20)
     table.insert(tabPages, tabPage)
@@ -168,12 +171,12 @@ end
 
 local function createSection(parent, titleText)
     local section = Instance.new("Frame", parent)
-    section.Size = UDim2.new(0.92, 0, 0, 0); section.AutomaticSize = Enum.AutomaticSize.Y; section.BackgroundColor3 = Theme.Surface
+    section.Size = UDim2.new(0.92, 0, 0, 0); section.AutomaticSize = Enum.AutomaticSize.Y; section.BackgroundColor3 = Theme.Surface; section.ZIndex = 3
     Instance.new("UICorner", section).CornerRadius = UDim.new(0, 10); Instance.new("UIStroke", section).Color = Theme.Border
     local title = Instance.new("TextLabel", section)
-    title.Size = UDim2.new(1, -30, 0, 35); title.Position = UDim2.new(0, 15, 0, 0); title.BackgroundTransparency = 1; title.Text = string.upper(titleText); title.TextColor3 = Theme.Accent; title.Font = Enum.Font.GothamBold; title.TextSize = 11; title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Size = UDim2.new(1, -30, 0, 35); title.Position = UDim2.new(0, 15, 0, 0); title.BackgroundTransparency = 1; title.Text = string.upper(titleText); title.TextColor3 = Theme.Accent; title.Font = Enum.Font.GothamBold; title.TextSize = 11; title.TextXAlignment = Enum.TextXAlignment.Left; title.ZIndex = 3
     local content = Instance.new("Frame", section)
-    content.Size = UDim2.new(1, 0, 0, 0); content.Position = UDim2.new(0, 0, 0, 35); content.AutomaticSize = Enum.AutomaticSize.Y; content.BackgroundTransparency = 1
+    content.Size = UDim2.new(1, 0, 0, 0); content.Position = UDim2.new(0, 0, 0, 35); content.AutomaticSize = Enum.AutomaticSize.Y; content.BackgroundTransparency = 1; content.ZIndex = 3
     local layout = Instance.new("UIListLayout", content)
     layout.Padding = UDim.new(0, 8); layout.HorizontalAlignment = Enum.HorizontalAlignment.Center; layout.SortOrder = Enum.SortOrder.LayoutOrder
     Instance.new("UIPadding", content).PaddingBottom = UDim.new(0, 15)
@@ -182,11 +185,11 @@ end
 
 local function createToggle(text, stateKey, parent, isDanger, callback)
     local container = Instance.new("TextButton", parent)
-    container.Size = UDim2.new(0.92, 0, 0, 40); container.BackgroundColor3 = Theme.Item; container.Text = ""; container.AutoButtonColor = false
+    container.Size = UDim2.new(0.92, 0, 0, 40); container.BackgroundColor3 = Theme.Item; container.Text = ""; container.AutoButtonColor = false; container.ZIndex = 4
     Instance.new("UICorner", container).CornerRadius = UDim.new(0, 6)
-    local lbl = Instance.new("TextLabel", container); lbl.Size = UDim2.new(1, -60, 1, 0); lbl.Position = UDim2.new(0, 15, 0, 0); lbl.BackgroundTransparency = 1; lbl.Text = text; lbl.TextColor3 = isDanger and Theme.Danger or Theme.Text; lbl.Font = Enum.Font.GothamMedium; lbl.TextSize = 13; lbl.TextXAlignment = Enum.TextXAlignment.Left
-    local track = Instance.new("Frame", container); track.Size = UDim2.new(0, 34, 0, 18); track.Position = UDim2.new(1, -45, 0.5, -9); track.BackgroundColor3 = Theme.ToggleOff; Instance.new("UICorner", track).CornerRadius = UDim.new(1, 0)
-    local knob = Instance.new("Frame", track); knob.Size = UDim2.new(0, 12, 0, 12); knob.Position = UDim2.new(0, 3, 0.5, -6); knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255); Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
+    local lbl = Instance.new("TextLabel", container); lbl.Size = UDim2.new(1, -60, 1, 0); lbl.Position = UDim2.new(0, 15, 0, 0); lbl.BackgroundTransparency = 1; lbl.Text = text; lbl.TextColor3 = isDanger and Theme.Danger or Theme.Text; lbl.Font = Enum.Font.GothamMedium; lbl.TextSize = 13; lbl.TextXAlignment = Enum.TextXAlignment.Left; lbl.ZIndex = 4
+    local track = Instance.new("Frame", container); track.Size = UDim2.new(0, 34, 0, 18); track.Position = UDim2.new(1, -45, 0.5, -9); track.BackgroundColor3 = Theme.ToggleOff; track.ZIndex = 4; Instance.new("UICorner", track).CornerRadius = UDim.new(1, 0)
+    local knob = Instance.new("Frame", track); knob.Size = UDim2.new(0, 12, 0, 12); knob.Position = UDim2.new(0, 3, 0.5, -6); knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255); knob.ZIndex = 5; Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
     local activeColor = isDanger and Theme.Danger or Theme.Accent
     local function updateVisuals()
         TS:Create(knob, TweenInfo.new(0.25, Enum.EasingStyle.Quint), {Position = toggles[stateKey] and UDim2.new(1, -15, 0.5, -6) or UDim2.new(0, 3, 0.5, -6)}):Play()
@@ -194,15 +197,15 @@ local function createToggle(text, stateKey, parent, isDanger, callback)
     end
     updateVisuals() 
     container.MouseButton1Click:Connect(function() toggles[stateKey] = not toggles[stateKey]; updateVisuals(); if callback then callback(toggles[stateKey]) end end)
-    return updateVisuals
+    return function() updateVisuals() end 
 end
 
 local function createInputRow(labelTxt, defaultVal, parent, boxWidth, stateKey)
     local container = Instance.new("Frame", parent)
-    container.Size = UDim2.new(0.92, 0, 0, 40); container.BackgroundColor3 = Theme.Item; Instance.new("UICorner", container).CornerRadius = UDim.new(0, 6)
-    local lbl = Instance.new("TextLabel", container); lbl.Size = UDim2.new(1 - (boxWidth or 0.35) - 0.1, 0, 1, 0); lbl.Position = UDim2.new(0, 15, 0, 0); lbl.BackgroundTransparency = 1; lbl.Text = labelTxt; lbl.TextColor3 = Theme.Text; lbl.Font = Enum.Font.GothamMedium; lbl.TextSize = 13; lbl.TextXAlignment = Enum.TextXAlignment.Left
-    local boxContainer = Instance.new("Frame", container); boxContainer.Size = UDim2.new(boxWidth or 0.35, 0, 0, 26); boxContainer.Position = UDim2.new(1 - (boxWidth or 0.35) - 0.05, 0, 0.5, -13); boxContainer.BackgroundColor3 = Theme.Background; Instance.new("UICorner", boxContainer).CornerRadius = UDim.new(0, 4); Instance.new("UIStroke", boxContainer).Color = Theme.Border
-    local box = Instance.new("TextBox", boxContainer); box.Size = UDim2.new(1, 0, 1, 0); box.BackgroundTransparency = 1; 
+    container.Size = UDim2.new(0.92, 0, 0, 40); container.BackgroundColor3 = Theme.Item; container.ZIndex = 4; Instance.new("UICorner", container).CornerRadius = UDim.new(0, 6)
+    local lbl = Instance.new("TextLabel", container); lbl.Size = UDim2.new(1 - (boxWidth or 0.35) - 0.1, 0, 1, 0); lbl.Position = UDim2.new(0, 15, 0, 0); lbl.BackgroundTransparency = 1; lbl.Text = labelTxt; lbl.TextColor3 = Theme.Text; lbl.Font = Enum.Font.GothamMedium; lbl.TextSize = 13; lbl.TextXAlignment = Enum.TextXAlignment.Left; lbl.ZIndex = 4
+    local boxContainer = Instance.new("Frame", container); boxContainer.Size = UDim2.new(boxWidth or 0.35, 0, 0, 26); boxContainer.Position = UDim2.new(1 - (boxWidth or 0.35) - 0.05, 0, 0.5, -13); boxContainer.BackgroundColor3 = Theme.Background; boxContainer.ZIndex = 4; Instance.new("UICorner", boxContainer).CornerRadius = UDim.new(0, 4); Instance.new("UIStroke", boxContainer).Color = Theme.Border
+    local box = Instance.new("TextBox", boxContainer); box.Size = UDim2.new(1, 0, 1, 0); box.BackgroundTransparency = 1; box.ZIndex = 5; 
     local actualDefault = (stateKey and savedInputs[stateKey]) and savedInputs[stateKey] or defaultVal
     box.Text = tostring(actualDefault); box.Font = Enum.Font.GothamBold; box.TextSize = 12; box.TextColor3 = Theme.Accent; box.ClearTextOnFocus = false
     if stateKey then inputInstances[stateKey] = box end
@@ -211,7 +214,7 @@ end
 
 local function createButton(text, parent, callback)
     local btn = Instance.new("TextButton", parent)
-    btn.Size = UDim2.new(0.92, 0, 0, 40); btn.BackgroundColor3 = Theme.Item; btn.Text = text; btn.Font = Enum.Font.GothamBold; btn.TextSize = 13; btn.TextColor3 = Theme.Text; btn.AutoButtonColor = false; Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6); Instance.new("UIStroke", btn).Color = Theme.Border
+    btn.Size = UDim2.new(0.92, 0, 0, 40); btn.BackgroundColor3 = Theme.Item; btn.Text = text; btn.Font = Enum.Font.GothamBold; btn.TextSize = 13; btn.TextColor3 = Theme.Text; btn.AutoButtonColor = false; btn.ZIndex = 4; Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6); Instance.new("UIStroke", btn).Color = Theme.Border
     btn.MouseEnter:Connect(function() TS:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(45, 45, 55)}):Play() end)
     btn.MouseLeave:Connect(function() TS:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = Theme.Item}):Play() end)
     btn.MouseButton1Down:Connect(function() TS:Create(btn, TweenInfo.new(0.1), {BackgroundColor3 = Theme.Accent}):Play() end)
@@ -222,18 +225,18 @@ end
 
 local function createLabelDisplay(text, parent)
     local container = Instance.new("Frame", parent)
-    container.Size = UDim2.new(0.92, 0, 0, 30); container.BackgroundColor3 = Theme.Background; Instance.new("UICorner", container).CornerRadius = UDim.new(0, 6)
-    local lbl = Instance.new("TextLabel", container); lbl.Size = UDim2.new(1, -20, 1, 0); lbl.Position = UDim2.new(0, 10, 0, 0); lbl.BackgroundTransparency = 1; lbl.Text = text; lbl.TextColor3 = Theme.Accent; lbl.Font = Enum.Font.GothamBold; lbl.TextSize = 11; lbl.TextXAlignment = Enum.TextXAlignment.Left
+    container.Size = UDim2.new(0.92, 0, 0, 30); container.BackgroundColor3 = Theme.Background; container.ZIndex = 4; Instance.new("UICorner", container).CornerRadius = UDim.new(0, 6)
+    local lbl = Instance.new("TextLabel", container); lbl.Size = UDim2.new(1, -20, 1, 0); lbl.Position = UDim2.new(0, 10, 0, 0); lbl.BackgroundTransparency = 1; lbl.Text = text; lbl.TextColor3 = Theme.Accent; lbl.Font = Enum.Font.GothamBold; lbl.TextSize = 11; lbl.TextXAlignment = Enum.TextXAlignment.Left; lbl.ZIndex = 4
     return lbl
 end
 
 local function createInventoryDropdown(labelTxt, stateKey, parent, callback)
     local container = Instance.new("Frame", parent)
-    container.Size = UDim2.new(0.92, 0, 0, 40); container.BackgroundColor3 = Theme.Item; container.ClipsDescendants = true; Instance.new("UICorner", container).CornerRadius = UDim.new(0, 6)
-    local lbl = Instance.new("TextLabel", container); lbl.Size = UDim2.new(0.5, 0, 0, 40); lbl.Position = UDim2.new(0, 15, 0, 0); lbl.BackgroundTransparency = 1; lbl.Text = labelTxt; lbl.TextColor3 = Theme.Text; lbl.Font = Enum.Font.GothamMedium; lbl.TextSize = 13; lbl.TextXAlignment = Enum.TextXAlignment.Left
-    local btnContainer = Instance.new("Frame", container); btnContainer.Size = UDim2.new(0.45, 0, 0, 26); btnContainer.Position = UDim2.new(0.5, 0, 0, 7); btnContainer.BackgroundColor3 = Theme.Background; Instance.new("UICorner", btnContainer).CornerRadius = UDim.new(0, 4); Instance.new("UIStroke", btnContainer).Color = Theme.Border
-    local mainBtn = Instance.new("TextButton", btnContainer); mainBtn.Size = UDim2.new(1, -5, 1, 0); mainBtn.Position = UDim2.new(0, 5, 0, 0); mainBtn.BackgroundTransparency = 1; toggles[stateKey] = toggles[stateKey] or "auto"; mainBtn.Text = "▶ " .. toggles[stateKey]; mainBtn.Font = Enum.Font.GothamBold; mainBtn.TextSize = 11; mainBtn.TextColor3 = Theme.Accent; mainBtn.TextTruncate = Enum.TextTruncate.AtEnd; mainBtn.TextXAlignment = Enum.TextXAlignment.Left
-    local optionList = Instance.new("ScrollingFrame", container); optionList.Size = UDim2.new(1, 0, 0, 120); optionList.Position = UDim2.new(0, 0, 0, 40); optionList.BackgroundTransparency = 1; optionList.ScrollBarThickness = 2; optionList.ScrollBarImageColor3 = Theme.Border
+    container.Size = UDim2.new(0.92, 0, 0, 40); container.BackgroundColor3 = Theme.Item; container.ClipsDescendants = true; container.ZIndex = 6; Instance.new("UICorner", container).CornerRadius = UDim.new(0, 6)
+    local lbl = Instance.new("TextLabel", container); lbl.Size = UDim2.new(0.5, 0, 0, 40); lbl.Position = UDim2.new(0, 15, 0, 0); lbl.BackgroundTransparency = 1; lbl.Text = labelTxt; lbl.TextColor3 = Theme.Text; lbl.Font = Enum.Font.GothamMedium; lbl.TextSize = 13; lbl.TextXAlignment = Enum.TextXAlignment.Left; lbl.ZIndex = 6
+    local btnContainer = Instance.new("Frame", container); btnContainer.Size = UDim2.new(0.45, 0, 0, 26); btnContainer.Position = UDim2.new(0.5, 0, 0, 7); btnContainer.BackgroundColor3 = Theme.Background; btnContainer.ZIndex = 6; Instance.new("UICorner", btnContainer).CornerRadius = UDim.new(0, 4); Instance.new("UIStroke", btnContainer).Color = Theme.Border
+    local mainBtn = Instance.new("TextButton", btnContainer); mainBtn.Size = UDim2.new(1, -5, 1, 0); mainBtn.Position = UDim2.new(0, 5, 0, 0); mainBtn.BackgroundTransparency = 1; toggles[stateKey] = toggles[stateKey] or "auto"; mainBtn.Text = "▶ " .. toggles[stateKey]; mainBtn.Font = Enum.Font.GothamBold; mainBtn.TextSize = 11; mainBtn.TextColor3 = Theme.Accent; mainBtn.TextTruncate = Enum.TextTruncate.AtEnd; mainBtn.TextXAlignment = Enum.TextXAlignment.Left; mainBtn.ZIndex = 7
+    local optionList = Instance.new("ScrollingFrame", container); optionList.Size = UDim2.new(1, 0, 0, 120); optionList.Position = UDim2.new(0, 0, 0, 40); optionList.BackgroundTransparency = 1; optionList.ScrollBarThickness = 2; optionList.ScrollBarImageColor3 = Theme.Border; optionList.ZIndex = 7
     local listLayout = Instance.new("UIListLayout", optionList); listLayout.SortOrder = Enum.SortOrder.LayoutOrder
     
     local isOpen = false
@@ -254,7 +257,7 @@ local function createInventoryDropdown(labelTxt, stateKey, parent, callback)
             end
             table.sort(rawItems); table.insert(rawItems, 1, "auto")
             for _, opt in ipairs(rawItems) do
-                local optBtn = Instance.new("TextButton", optionList); optBtn.Size = UDim2.new(1, 0, 0, 30); optBtn.BackgroundColor3 = Theme.Surface; optBtn.Text = "  " .. opt; optBtn.Font = Enum.Font.GothamMedium; optBtn.TextSize = 11; optBtn.TextColor3 = Theme.TextMuted; optBtn.BorderSizePixel = 0; optBtn.TextXAlignment = Enum.TextXAlignment.Left; optBtn.TextTruncate = Enum.TextTruncate.AtEnd
+                local optBtn = Instance.new("TextButton", optionList); optBtn.Size = UDim2.new(1, 0, 0, 30); optBtn.BackgroundColor3 = Theme.Surface; optBtn.Text = "  " .. opt; optBtn.Font = Enum.Font.GothamMedium; optBtn.TextSize = 11; optBtn.TextColor3 = Theme.TextMuted; optBtn.BorderSizePixel = 0; optBtn.TextXAlignment = Enum.TextXAlignment.Left; optBtn.TextTruncate = Enum.TextTruncate.AtEnd; optBtn.ZIndex = 8
                 optBtn.MouseEnter:Connect(function() optBtn.TextColor3 = Theme.Text end); optBtn.MouseLeave:Connect(function() optBtn.TextColor3 = Theme.TextMuted end)
                 optBtn.MouseButton1Click:Connect(function() toggles[stateKey] = opt; mainBtn.Text = "▶ " .. opt; isOpen = false; TS:Create(container, TweenInfo.new(0.25, Enum.EasingStyle.Quint), {Size = UDim2.new(0.92, 0, 0, 40)}):Play(); if callback then callback(opt) end end)
             end
@@ -265,38 +268,57 @@ local function createInventoryDropdown(labelTxt, stateKey, parent, callback)
     end)
 end
 
--- POPUP GRID UI
+-- ==========================================
+-- POPUP GRID UI (DIPERBESAR MENJADI 8x8)
+-- ==========================================
 local popupOverlay = Instance.new("Frame", gui)
-popupOverlay.Size = UDim2.new(1, 0, 1, 0); popupOverlay.BackgroundColor3 = Color3.new(0, 0, 0); popupOverlay.BackgroundTransparency = 0.5; popupOverlay.Visible = false; popupOverlay.Active = true; popupOverlay.ZIndex = 10
-local gridPopup = Instance.new("Frame", popupOverlay)
-gridPopup.Size = UDim2.new(0, 300, 0, 380); gridPopup.Position = UDim2.new(0.5, -150, 0.5, -190); gridPopup.BackgroundColor3 = Theme.Background; gridPopup.ZIndex = 11; Instance.new("UICorner", gridPopup).CornerRadius = UDim.new(0, 12); Instance.new("UIStroke", gridPopup).Color = Theme.Border
-local gridHeader = Instance.new("Frame", gridPopup)
-gridHeader.Size = UDim2.new(1, 0, 0, 50); gridHeader.BackgroundTransparency = 1; gridHeader.ZIndex = 12
-local gridTitleLbl = Instance.new("TextLabel", gridHeader)
-gridTitleLbl.Size = UDim2.new(1, -60, 1, 0); gridTitleLbl.Position = UDim2.new(0, 20, 0, 0); gridTitleLbl.BackgroundTransparency = 1; gridTitleLbl.Text = "SELECT GRID FARM"; gridTitleLbl.Font = Enum.Font.GothamBold; gridTitleLbl.TextSize = 16; gridTitleLbl.TextColor3 = Theme.Text; gridTitleLbl.ZIndex = 12; gridTitleLbl.TextXAlignment = Enum.TextXAlignment.Left
-local gridCloseBtn = Instance.new("TextButton", gridHeader)
-gridCloseBtn.Size = UDim2.new(0, 50, 0, 50); gridCloseBtn.Position = UDim2.new(1, -50, 0, 0); gridCloseBtn.BackgroundTransparency = 1; gridCloseBtn.Text = "✕"; gridCloseBtn.Font = Enum.Font.GothamBold; gridCloseBtn.TextSize = 14; gridCloseBtn.TextColor3 = Theme.TextMuted; gridCloseBtn.ZIndex = 12; gridCloseBtn.MouseButton1Click:Connect(function() popupOverlay.Visible = false end)
-local gridContainer = Instance.new("Frame", gridPopup)
-gridContainer.Size = UDim2.new(0, 245, 0, 245); gridContainer.Position = UDim2.new(0.5, -122.5, 0, 50); gridContainer.BackgroundTransparency = 1; gridContainer.ZIndex = 12
-local uigrid = Instance.new("UIGridLayout", gridContainer)
-uigrid.CellSize = UDim2.new(0, 45, 0, 45); uigrid.CellPadding = UDim2.new(0, 5, 0, 5); uigrid.SortOrder = Enum.SortOrder.LayoutOrder
+popupOverlay.Size = UDim2.new(1, 0, 1, 0); popupOverlay.BackgroundColor3 = Color3.new(0, 0, 0); popupOverlay.BackgroundTransparency = 0.5; popupOverlay.Visible = false; popupOverlay.Active = true; popupOverlay.ZIndex = 100
 
-for i = 1, 25 do
-    local dx = (i - 1) % 5 - 2; local row = math.floor((i - 1) / 5); local dy = 3 - row; local key = tostring(dx) .. "," .. tostring(dy)
+local gridPopup = Instance.new("Frame", popupOverlay)
+-- Ukuran popup sedikit diperbesar agar muat 64 kotak (8x8)
+gridPopup.Size = UDim2.new(0, 320, 0, 420); gridPopup.Position = UDim2.new(0.5, -160, 0.5, -210); gridPopup.BackgroundColor3 = Theme.Background; gridPopup.ZIndex = 101; Instance.new("UICorner", gridPopup).CornerRadius = UDim.new(0, 12); Instance.new("UIStroke", gridPopup).Color = Theme.Border
+
+local gridHeader = Instance.new("Frame", gridPopup)
+gridHeader.Size = UDim2.new(1, 0, 0, 50); gridHeader.BackgroundTransparency = 1; gridHeader.ZIndex = 102
+
+local gridTitleLbl = Instance.new("TextLabel", gridHeader)
+gridTitleLbl.Size = UDim2.new(1, -60, 1, 0); gridTitleLbl.Position = UDim2.new(0, 20, 0, 0); gridTitleLbl.BackgroundTransparency = 1; gridTitleLbl.Text = "SELECT GRID (8x8)"; gridTitleLbl.Font = Enum.Font.GothamBold; gridTitleLbl.TextSize = 16; gridTitleLbl.TextColor3 = Theme.Text; gridTitleLbl.ZIndex = 102; gridTitleLbl.TextXAlignment = Enum.TextXAlignment.Left
+
+local gridCloseBtn = Instance.new("TextButton", gridHeader)
+gridCloseBtn.Size = UDim2.new(0, 50, 0, 50); gridCloseBtn.Position = UDim2.new(1, -50, 0, 0); gridCloseBtn.BackgroundTransparency = 1; gridCloseBtn.Text = "✕"; gridCloseBtn.Font = Enum.Font.GothamBold; gridCloseBtn.TextSize = 14; gridCloseBtn.TextColor3 = Theme.TextMuted; gridCloseBtn.ZIndex = 102; gridCloseBtn.MouseButton1Click:Connect(function() popupOverlay.Visible = false end)
+
+local gridContainer = Instance.new("Frame", gridPopup)
+-- Menyesuaikan lebar container untuk 8 kolom
+gridContainer.Size = UDim2.new(0, 284, 0, 284); gridContainer.Position = UDim2.new(0.5, -142, 0, 55); gridContainer.BackgroundTransparency = 1; gridContainer.ZIndex = 102
+
+local uigrid = Instance.new("UIGridLayout", gridContainer)
+-- Mengecilkan sel dari 45x45 menjadi 32x32 agar muat 8 baris & kolom
+uigrid.CellSize = UDim2.new(0, 32, 0, 32); uigrid.CellPadding = UDim2.new(0, 4, 0, 4); uigrid.SortOrder = Enum.SortOrder.LayoutOrder
+
+-- Loop 64 kali untuk membuat grid 8x8
+for i = 1, 64 do
+    local dx = (i - 1) % 8 - 3
+    local row = math.floor((i - 1) / 8)
+    local dy = 3 - row 
+    local key = tostring(dx) .. "," .. tostring(dy)
+    
     local btn = Instance.new("TextButton", gridContainer)
-    btn.Text = ""; btn.BackgroundColor3 = toggles.farmGrids[key] and Theme.Orange or Theme.Item; btn.ZIndex = 13; Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+    btn.Text = ""; btn.BackgroundColor3 = toggles.farmGrids[key] and Theme.Orange or Theme.Item; btn.ZIndex = 103; Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+    
+    -- Menandai posisi tengah karakter (I'M HERE / ME)
     if dx == 0 and dy == 0 then
         local userPenanda = Instance.new("Frame", btn)
-        userPenanda.Size = UDim2.new(0, 40, 0, 40); userPenanda.Position = UDim2.new(0.5, 0, 0.5, 0); userPenanda.AnchorPoint = Vector2.new(0.5, 0.5); userPenanda.BackgroundColor3 = Theme.Orange; userPenanda.BackgroundTransparency = 0.5; userPenanda.ZIndex = 14; Instance.new("UICorner", userPenanda).CornerRadius = UDim.new(1, 0)
+        userPenanda.Size = UDim2.new(0, 28, 0, 28); userPenanda.Position = UDim2.new(0.5, 0, 0.5, 0); userPenanda.AnchorPoint = Vector2.new(0.5, 0.5); userPenanda.BackgroundColor3 = Theme.Orange; userPenanda.BackgroundTransparency = 0.5; userPenanda.ZIndex = 104; Instance.new("UICorner", userPenanda).CornerRadius = UDim.new(1, 0)
         local userIconContainer = Instance.new("Frame", userPenanda)
-        userIconContainer.Size = UDim2.new(0, 20, 0, 20); userIconContainer.Position = UDim2.new(0.5, 0, 0.4, 0); userIconContainer.AnchorPoint = Vector2.new(0.5, 0.5); userIconContainer.BackgroundColor3 = Color3.fromRGB(255, 255, 255); userIconContainer.ZIndex = 15; Instance.new("UICorner", userIconContainer).CornerRadius = UDim.new(1, 0)
-        local userIcon = Instance.new("ImageLabel", userIconContainer); userIcon.Size = UDim2.new(1, 0, 1, 0); userIcon.BackgroundTransparency = 1; userIcon.Image = "rbxassetid://15264843997"; userIcon.ImageColor3 = Theme.Orange; userIcon.ZIndex = 16
-        local lbl = Instance.new("TextLabel", userPenanda); lbl.Size = UDim2.new(1, 0, 0, 15); lbl.Position = UDim2.new(0.5, 0, 0.7, 0); lbl.AnchorPoint = Vector2.new(0.5, 0.5); lbl.BackgroundTransparency = 1; lbl.Text = "I'M HERE"; lbl.Font = Enum.Font.GothamBold; lbl.TextSize = 8; lbl.TextColor3 = Theme.Orange; lbl.ZIndex = 15
+        userIconContainer.Size = UDim2.new(0, 14, 0, 14); userIconContainer.Position = UDim2.new(0.5, 0, 0.4, 0); userIconContainer.AnchorPoint = Vector2.new(0.5, 0.5); userIconContainer.BackgroundColor3 = Color3.fromRGB(255, 255, 255); userIconContainer.ZIndex = 105; Instance.new("UICorner", userIconContainer).CornerRadius = UDim.new(1, 0)
+        local userIcon = Instance.new("ImageLabel", userIconContainer); userIcon.Size = UDim2.new(1, 0, 1, 0); userIcon.BackgroundTransparency = 1; userIcon.Image = "rbxassetid://15264843997"; userIcon.ImageColor3 = Theme.Orange; userIcon.ZIndex = 106
+        local lbl = Instance.new("TextLabel", userPenanda); lbl.Size = UDim2.new(1, 0, 0, 10); lbl.Position = UDim2.new(0.5, 0, 0.75, 0); lbl.AnchorPoint = Vector2.new(0.5, 0.5); lbl.BackgroundTransparency = 1; lbl.Text = "ME"; lbl.Font = Enum.Font.GothamBold; lbl.TextSize = 7; lbl.TextColor3 = Theme.Orange; lbl.ZIndex = 105
     end
     btn.MouseButton1Click:Connect(function() toggles.farmGrids[key] = not toggles.farmGrids[key]; TS:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = toggles.farmGrids[key] and Theme.Orange or Theme.Item}):Play() end)
 end
+
 local saveGridBtn = Instance.new("TextButton", gridPopup)
-saveGridBtn.Size = UDim2.new(0, 200, 0, 45); saveGridBtn.Position = UDim2.new(0.5, -100, 1, -60); saveGridBtn.BackgroundColor3 = Theme.Success; saveGridBtn.Text = "Done"; saveGridBtn.Font = Enum.Font.GothamBold; saveGridBtn.TextSize = 16; saveGridBtn.TextColor3 = Color3.fromRGB(13, 13, 17); saveGridBtn.ZIndex = 12; saveGridBtn.AutoButtonColor = false; Instance.new("UICorner", saveGridBtn).CornerRadius = UDim.new(0, 8)
+saveGridBtn.Size = UDim2.new(0, 200, 0, 40); saveGridBtn.Position = UDim2.new(0.5, -100, 1, -55); saveGridBtn.BackgroundColor3 = Theme.Success; saveGridBtn.Text = "Done"; saveGridBtn.Font = Enum.Font.GothamBold; saveGridBtn.TextSize = 16; saveGridBtn.TextColor3 = Color3.fromRGB(13, 13, 17); saveGridBtn.ZIndex = 102; saveGridBtn.AutoButtonColor = false; Instance.new("UICorner", saveGridBtn).CornerRadius = UDim.new(0, 8)
 saveGridBtn.MouseButton1Click:Connect(function() popupOverlay.Visible = false end)
 
 local function toggleMenu() frame.Visible = not frame.Visible; openBtn.Visible = not frame.Visible end
@@ -419,7 +441,7 @@ local Core = {
 }
 
 -- [!] GANTI URL DI BAWAH INI DENGAN RAW URL GITHUB REPOSITORY KAMU
-local GITHUB_REPO = "https://raw.githubusercontent.com/XzNapi/NLIGHT/main/"
+local GITHUB_REPO = "https://raw.githubusercontent.com/NAMA_GITHUB_KAMU/NAMA_REPO_KAMU/main/"
 
 local function loadModule(name)
     local success, result = pcall(function() return loadstring(game:HttpGet(GITHUB_REPO .. name .. ".lua"))() end)
