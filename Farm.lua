@@ -23,7 +23,7 @@ return function(Core)
     Core.UI.createInventoryDropdown("Target to Break", "breakerTarget", secBreaker)
     Core.UI.createInputRow("Move Speed", "45", secBreaker, 0.35, "breakerSpeedBox")
     Core.UI.createToggle("Enable Auto Breaker", "autoBreaker", secBreaker, false)
-    Core.UI.createInputRow("Hit Spam / Break", "25", secBreaker, 0.35, "hitMultiplierBox")
+    Core.UI.createInputRow("Hit Spam / Break", "55", secBreaker, 0.50, "hitMultiplierBox")
     Core.UI.createToggle("One Hit Break (Burst)", "oneHitBreak", secBreaker, true)
 
     local secLoot = Core.UI.createSection(Core.Pages.Farm, "Genius Auto-Loot")
@@ -31,12 +31,11 @@ return function(Core)
     Core.UI.createToggle("Radar Item Drop", "itemRadar", secLoot, false)
     Core.UI.createToggle("Enable Auto-Loot", "autoLoot", secLoot, false) 
 
-    -- FITUR BARU: INVENTORY & DROP MANAGER
+    -- FITUR: INVENTORY & DROP MANAGER
     local secDrop = Core.UI.createSection(Core.Pages.Farm, "Inventory & Drop Manager")
     Core.UI.createInventoryDropdown("Item to Drop", "dropTargetItem", secDrop)
     local dropAmtBox = Core.UI.createInputRow("Amount to Drop", "200", secDrop, 0.35, "dropAmountBox")
     
-    -- Fungsi Eksekusi Drop (Bypass Limit 200)
     local function executeDrop(targetStr, totalToDrop)
         if not targetStr or targetStr == "" then return end
         if Core.Managers.InventoryModule and Core.Managers.InventoryModule.Stacks then
@@ -52,7 +51,6 @@ return function(Core)
                     
                     if currentID == targetStr or itemName == targetStr then
                         local stackLeft = stackInfo.Amount
-                        -- Memecah jumlah drop jika lebih dari 200
                         while stackLeft > 0 and totalToDrop > 0 do
                             local dropNow = math.min(totalToDrop, stackLeft, 200) 
                             pcall(function()
@@ -66,7 +64,7 @@ return function(Core)
                                     ButtonAction = "drp",
                                     Inputs = { amt = tostring(dropNow) }
                                 })
-                                task.wait(0.1) -- Jeda aman antar drop
+                                task.wait(0.1)
                             end)
                             totalToDrop = totalToDrop - dropNow
                             stackLeft = stackLeft - dropNow
@@ -77,26 +75,38 @@ return function(Core)
         end
     end
 
-    -- Tombol Drop Manual Sesuai Jumlah Textbox
     Core.UI.createButton("Drop Amount Now", secDrop, function()
         local target = string.lower(Core.Toggles.dropTargetItem or "auto")
         if target == "auto" then target = Core.Utils.getHeldItem() end
         local amt = tonumber(dropAmtBox.Text) or 200
-        
-        -- Dijalankan di thread terpisah agar tidak freeze UI
-        task.spawn(function()
-            executeDrop(target, amt)
-        end)
+        task.spawn(function() executeDrop(target, amt) end)
     end)
-
-    -- Toggle Auto Drop Loop (Mendeteksi & membuang item secara otomatis)
     Core.UI.createToggle("Auto Drop (Loop)", "autoDropLoop", secDrop, false)
 
     -- =========================================================================
     -- LOGIC & ENGINE
     -- =========================================================================
 
-    -- 1. LOOP AUTO DROP ITEM
+    -- [ FPS BOOSTER ] GLOBAL ANCHOR MANAGER 
+    -- Mengunci fisik karakter jika salah satu fitur auto menyala agar tidak terjadi FPS Drop
+    task.spawn(function()
+        while task.wait(0.2) do
+            pcall(function()
+                local char = Core.LocalPlayer.Character
+                local hrp = char and (char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart)
+                if hrp then
+                    local isBotting = Core.Toggles.smartAutoFarm or Core.Toggles.autoPlanter or Core.Toggles.autoBreaker or Core.Toggles.autoLoot
+                    if isBotting then
+                        if not hrp.Anchored then hrp.Anchored = true end
+                    else
+                        if hrp.Anchored then hrp.Anchored = false end
+                    end
+                end
+            end)
+        end
+    end)
+
+    -- LOOP AUTO DROP ITEM
     task.spawn(function()
         while task.wait(1) do
             if Core.Toggles.autoDropLoop then
@@ -108,7 +118,7 @@ return function(Core)
         end
     end)
 
-    -- 2. SMART AUTO FARM ENGINE (AI STATE MACHINE MASTERPIECE)
+    -- SMART AUTO FARM ENGINE (AI STATE MACHINE MASTERPIECE)
     local farmPhase = "PLACE" 
     local farmStartPos = nil
     local isOutOfItems = false 
@@ -117,9 +127,6 @@ return function(Core)
         while task.wait() do
             pcall(function()
                 if Core.Toggles.smartAutoFarm and Core.Managers.MovementState and Core.Remotes.PlayerFistRemote and Core.Remotes.PlayerPlaceRemote then
-                    local char = Core.LocalPlayer.Character
-                    local hrp = char and (char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart)
-                    if hrp and not hrp.Anchored then hrp.Anchored = true end 
                     
                     if not farmStartPos then farmStartPos = Core.Managers.MovementState.Position end
                     local startPx = math.floor(farmStartPos.X / Core.Utils.TILE_SIZE + 0.5)
@@ -252,7 +259,7 @@ return function(Core)
                                 for _, v in ipairs(dropsFolder:GetChildren()) do if v:IsA("BasePart") or v:IsA("Model") then table.insert(itemsToLoot, v) end end
                             else
                                 for _, obj in ipairs(workspace:GetChildren()) do
-                                    if obj:IsA("BasePart") and not obj:IsDescendantOf(char) and not Core.Players:GetPlayerFromCharacter(obj.Parent) and obj.Size.Y < 3 then table.insert(itemsToLoot, obj) end
+                                    if obj:IsA("BasePart") and not obj:IsDescendantOf(Core.LocalPlayer.Character) and not Core.Players:GetPlayerFromCharacter(obj.Parent) and obj.Size.Y < 3 then table.insert(itemsToLoot, obj) end
                                 end
                             end
                             
@@ -296,7 +303,6 @@ return function(Core)
                                 farmStartPos = nil
                                 farmPhase = "PLACE"
                                 isOutOfItems = false
-                                if hrp and hrp.Anchored then hrp.Anchored = false end
                             else
                                 farmPhase = "PLACE"
                             end
@@ -311,9 +317,6 @@ return function(Core)
                     farmStartPos = nil
                     farmPhase = "PLACE"
                     isOutOfItems = false
-                    local char = Core.LocalPlayer.Character
-                    local hrp = char and (char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart)
-                    if hrp and hrp.Anchored then hrp.Anchored = false end
                 end
             end)
         end
