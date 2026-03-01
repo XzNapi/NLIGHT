@@ -230,7 +230,6 @@ local function createLabelDisplay(text, parent)
     return lbl
 end
 
--- UPDATE PENTING: MENAMBAHKAN PARAMETER filterFunc
 local function createInventoryDropdown(labelTxt, stateKey, parent, callback, filterFunc)
     local container = Instance.new("Frame", parent)
     container.Size = UDim2.new(0.92, 0, 0, 40); container.BackgroundColor3 = Theme.Item; container.ClipsDescendants = true; container.ZIndex = 6; Instance.new("UICorner", container).CornerRadius = UDim.new(0, 6)
@@ -253,11 +252,8 @@ local function createInventoryDropdown(labelTxt, stateKey, parent, callback, fil
                         local itemId = tostring(stackInfo.Id)
                         local itemName = ItemsManager and ItemsManager.ItemsData and ItemsManager.ItemsData[itemId] and ItemsManager.ItemsData[itemId].Name or itemId
                         
-                        -- CEK FILTER FUNC DISINI
                         local isAllowed = true
-                        if filterFunc then
-                            isAllowed = filterFunc(string.lower(itemName), string.lower(itemId))
-                        end
+                        if filterFunc then isAllowed = filterFunc(string.lower(itemName), string.lower(itemId)) end
                         
                         if isAllowed and not addedItems[itemName] then 
                             table.insert(rawItems, itemName)
@@ -338,7 +334,7 @@ local pageMisc = createTab("Misc")
 tabButtons[1].TextColor3 = Theme.Text; pageMove.Visible = true; task.spawn(function() task.wait(0.1); activeIndicator.Position = UDim2.new(0, tabButtons[1].AbsolutePosition.X - frame.AbsolutePosition.X, 0, 85); activeIndicator.Size = UDim2.new(0, tabButtons[1].AbsoluteSize.X, 0, 3) end)
 
 -- ==========================================
--- PATHFINDING CORE
+-- PATHFINDING CORE (MEMPERBAIKI AI TERBANG)
 -- ==========================================
 local blacklistedItems, blacklistedSpots, passableTilesCache, solidTilesCache = {}, {}, {}, {}
 task.spawn(function() while task.wait(5) do blacklistedSpots = {}; blacklistedItems = {}; passableTilesCache = {}; solidTilesCache = {} end end)
@@ -354,8 +350,16 @@ local function isTileSolidForPathfinding(x, y)
     if not WorldManager or not WorldManager.GetTile then return false end
     local tileId = WorldManager.GetTile(x, y, 1); if not tileId then return false end
     if passableTilesCache[tileId] then return false end; if solidTilesCache[tileId] then return true end
+    
+    local idStr = string.lower(tostring(tileId))
     local name = string.lower(tostring((ItemsManager and ItemsManager.ItemsData and ItemsManager.ItemsData[tileId] and ItemsManager.ItemsData[tileId].Name) or tileId))
-    if string.find(name, "sapling") then passableTilesCache[tileId] = true; return false end
+    
+    -- [KUNCI]: Jika namanya mengandung _sapling, abaikan total (AI bisa menembusnya)
+    if string.find(idStr, "_sapling") or string.find(name, "_sapling") then 
+        passableTilesCache[tileId] = true
+        return false 
+    end
+    
     solidTilesCache[tileId] = true; return true
 end
 
@@ -447,7 +451,7 @@ local Core = {
 }
 
 -- [!] GANTI URL DI BAWAH INI DENGAN RAW URL GITHUB REPOSITORY KAMU
-local GITHUB_REPO = "https://raw.githubusercontent.com/XzNapi/NLIGHT/main/"
+local GITHUB_REPO = "https://raw.githubusercontent.com/NAMA_GITHUB_KAMU/NAMA_REPO_KAMU/main/"
 
 local function loadModule(name)
     local success, result = pcall(function() return loadstring(game:HttpGet(GITHUB_REPO .. name .. ".lua"))() end)
