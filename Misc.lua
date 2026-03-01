@@ -22,7 +22,6 @@ return function(Core)
     Core.UI.createToggle("Hide Player Names", "hideNames", secVisual, false)
 
     local secAdmin = Core.UI.createSection(Core.Pages.Misc, "Admin & Security")
-    -- FITUR BARU: Mod Detector (Toggle berwarna merah/danger)
     Core.UI.createToggle("Mod Detector (Auto-Disconnect)", "modDetector", secAdmin, true)
     Core.UI.createToggle("Fake VIP (Cosmetic)", "fakeVip", secAdmin, false, function(state)
         pcall(function()
@@ -52,24 +51,18 @@ return function(Core)
     -- ==========================================
 
     -- [SISTEM KEAMANAN: MOD DETECTOR]
-    -- Fungsi untuk mengecek apakah player tersebut adalah Staff/Mod
     local function isMod(player)
         if player == Core.LocalPlayer then return false end
         local prefix = tostring(player:GetAttribute("namePrefix") or "")
         local name = player.Name
         local display = player.DisplayName
-        
-        -- Deteksi simbol "@" di Username, DisplayName, atau Custom Role Prefix
-        if string.find(name, "@") or string.find(display, "@") or string.find(prefix, "@") then
-            return true
-        end
+        if string.find(name, "@") or string.find(display, "@") or string.find(prefix, "@") then return true end
         return false
     end
 
-    -- Trigger saat ada pemain BARU masuk ke server
     Core.Players.PlayerAdded:Connect(function(player)
         if Core.Toggles.modDetector then
-            task.wait(1) -- Beri waktu sejenak agar attribute role game termuat
+            task.wait(1) 
             pcall(function()
                 if isMod(player) then
                     Core.LocalPlayer:Kick("\n[🛡️ NLight Security]\nMod/Admin (" .. player.Name .. ") terdeteksi masuk ke World!\nSistem otomatis memutuskan koneksi untuk menghindari Banned.")
@@ -78,7 +71,6 @@ return function(Core)
         end
     end)
 
-    -- Loop Scanner (Untuk mengecek player yang SUDAH ADA saat kamu masuk, atau jika role mereka tiba-tiba berubah)
     task.spawn(function()
         while task.wait(1) do
             pcall(function()
@@ -94,17 +86,33 @@ return function(Core)
         end
     end)
 
-    -- [SISTEM CHAT SPAM]
+    -- [SISTEM CHAT SPAM DENGAN BYPASS ANTI-SPAM]
+    local spamCounter = 0 -- Variabel penghitung angka
+
     task.spawn(function()
         while task.wait() do
             pcall(function()
                 if Core.Toggles.chatSpam then
                     local delayTime = tonumber(Core.Inputs["spamDelayBox"] and Core.Inputs["spamDelayBox"].Text) or 2
                     if delayTime < 0.5 then delayTime = 0.5 end 
-                    local msg = Core.Inputs["spamMsgBox"] and Core.Inputs["spamMsgBox"].Text or ""
-                    if msg ~= "" then
-                        if Core.Remotes.CBRemote then Core.Remotes.CBRemote:FireServer(msg)
-                        else local foundCB = Core.ReplicatedStorage:FindFirstChild("CB"); if foundCB then foundCB:FireServer(msg) end end
+                    local baseMsg = Core.Inputs["spamMsgBox"] and Core.Inputs["spamMsgBox"].Text or ""
+                    
+                    if baseMsg ~= "" then
+                        -- Menggabungkan pesan dengan angka di belakangnya
+                        local finalMsg = baseMsg .. " [" .. tostring(spamCounter) .. "]"
+                        
+                        if Core.Remotes.CBRemote then 
+                            Core.Remotes.CBRemote:FireServer(finalMsg)
+                        else 
+                            local foundCB = Core.ReplicatedStorage:FindFirstChild("CB")
+                            if foundCB then foundCB:FireServer(finalMsg) end 
+                        end
+
+                        -- Logika penambahan angka dan reset
+                        spamCounter = spamCounter + 1
+                        if spamCounter > 10 then
+                            spamCounter = 0 -- Kembali ke 0 setelah mencapai 10
+                        end
                     end
                     task.wait(delayTime)
                 end
