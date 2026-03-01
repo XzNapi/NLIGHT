@@ -24,7 +24,7 @@ return function(Core)
     Core.UI.createToggle("Radar Item Drop", "itemRadar", secLoot, false)
     Core.UI.createToggle("Enable Auto-Loot", "autoLoot", secLoot, false) 
 
-    -- SMART AUTO FARM ENGINE (SMOOTH STATE MACHINE)
+    -- SMART AUTO FARM ENGINE (SEQUENTIAL STATE MACHINE)
     local farmStartPos = nil
 
     task.spawn(function()
@@ -51,7 +51,7 @@ return function(Core)
                     end
                     
                     if #targetList > 0 then
-                        -- URUTKAN DARI KIRI KE KANAN (Berdasarkan nilai X terkecil ke X terbesar)
+                        -- URUTKAN DARI KIRI KE KANAN (Berdasarkan nilai X terkecil ke terbesar)
                         table.sort(targetList, function(a, b)
                             if a.dy == b.dy then return a.dx < b.dx end
                             return a.dy > b.dy 
@@ -62,13 +62,13 @@ return function(Core)
                         -- ==========================================================
                         local itemHabis = false
                         for i = 1, #targetList do
-                            if not Core.Toggles.smartAutoFarm then break end -- Keluar jika toggle dimatikan
+                            if not Core.Toggles.smartAutoFarm then break end 
                             
                             local targetGrid = Vector2.new(targetList[i].x, targetList[i].y)
                             local hasBlock = false
                             
                             if Core.Managers.WorldManager and Core.Managers.WorldManager.GetTile then
-                                for l = 1, 5 do if Core.Managers.WorldManager.GetTile(targetList[i].x, targetList[i].y, l) then hasBlock = true break end end
+                                for l = 1, 5 do if Core.Managers.WorldManager.GetTile(targetGrid.X, targetGrid.Y, l) then hasBlock = true break end end
                             end
                             
                             if not hasBlock then
@@ -99,18 +99,18 @@ return function(Core)
                                 
                                 if slotIndexToSend then 
                                     Core.Remotes.PlayerPlaceRemote:FireServer(targetGrid, slotIndexToSend)
-                                    -- Jeda sangat kecil agar animasi mengalir mulus (tidak patah-patah)
-                                    task.wait(0.02)
+                                    -- Jeda sangat singkat (0.05s) agar terlihat mengalir lurus dari kiri ke kanan
+                                    task.wait(0.05)
                                 else
                                     itemHabis = true
-                                    break -- Berhenti menanam jika item habis
+                                    break
                                 end
                             end
                         end
                         
-                        -- Matikan farm jika item benar-benar habis di tengah jalan
+                        -- JIKA ITEM HABIS, MATIKAN AUTO FARM SEPENUHNYA
                         if itemHabis then
-                            print("[NLight] Smart Auto-Farm: Item habis. Bot berhenti.")
+                            print("[NLight] Smart Auto-Farm: Item habis atau tidak ditemukan. Bot berhenti.")
                             Core.Toggles.smartAutoFarm = false
                             if updateSmartFarmToggle then updateSmartFarmToggle() end
                             farmStartPos = nil
@@ -120,7 +120,6 @@ return function(Core)
 
                         -- ==========================================================
                         -- FASE 2: BREAK SEMUA ITEM (KIRI KE KANAN)
-                        -- (Hanya berjalan setelah seluruh fase Place selesai)
                         -- ==========================================================
                         if Core.Toggles.smartAutoFarm then
                             local delayBreakMs = tonumber(Core.Inputs["smartFarmDelayBox"] and Core.Inputs["smartFarmDelayBox"].Text) or 250
@@ -132,13 +131,14 @@ return function(Core)
                                 local hasBlock = false
                                 
                                 if Core.Managers.WorldManager and Core.Managers.WorldManager.GetTile then
-                                    for l = 1, 5 do if Core.Managers.WorldManager.GetTile(targetList[i].x, targetList[i].y, l) then hasBlock = true break end end
+                                    for l = 1, 5 do if Core.Managers.WorldManager.GetTile(targetGrid.X, targetGrid.Y, l) then hasBlock = true break end end
                                 end
 
                                 if hasBlock then
                                     local hitsToSend = 25 
                                     for j = 1, hitsToSend do Core.Remotes.PlayerFistRemote:FireServer(targetGrid) end
-                                    -- Delay setelah menghancurkan satu blok sebelum lanjut ke sebelahnya
+                                    
+                                    -- Jeda break per block diatur dari Textbox
                                     task.wait(delayBreakMs / 1000)
                                 end
                             end
@@ -146,10 +146,9 @@ return function(Core)
 
                         -- ==========================================================
                         -- FASE 3: AUTO LOOT LALU KEMBALI KE POSISI AWAL
-                        -- (Hanya berjalan setelah seluruh fase Break selesai)
                         -- ==========================================================
                         if Core.Toggles.smartAutoFarm then
-                            -- Jeda sebentar untuk membiarkan animasi item drop jatuh ke tanah
+                            -- Jeda di awal fase Loot untuk menunggu semua item drop muncul di server
                             task.wait(0.3) 
 
                             local dropsFolder = workspace:FindFirstChild("Drops") or workspace:FindFirstChild("DroppedItems") or workspace:FindFirstChild("Items")
@@ -163,7 +162,7 @@ return function(Core)
                             end
                             
                             if #itemsToLoot > 0 then
-                                -- URUTKAN DARI KIRI KE KANAN SECARA SPESIFIK
+                                -- URUTKAN ITEM DARI KIRI KE KANAN (X Terkecil ke X Terbesar)
                                 table.sort(itemsToLoot, function(a, b)
                                     local posA = a:IsA("BasePart") and a.Position or (a:IsA("Model") and a.PrimaryPart and a.PrimaryPart.Position) or Vector3.new(9999,9999,9999)
                                     local posB = b:IsA("BasePart") and b.Position or (b:IsA("Model") and b.PrimaryPart and b.PrimaryPart.Position) or Vector3.new(9999,9999,9999)
@@ -181,6 +180,7 @@ return function(Core)
                                         local endY = math.floor(part.Position.Y / Core.Utils.TILE_SIZE + 0.5)
                                         local distFromStart = math.sqrt((endX - startPx)^2 + (endY - startPy)^2)
                                         
+                                        -- Mengambil item yang ada di radius lahan farm
                                         if distFromStart <= 15 and not Core.Pathfinding.isOutOfBounds(endX, endY) and not Core.Pathfinding.isItemTrapped(endX, endY) then
                                             Core.Pathfinding.aiMoveTo(endX, endY, moveSpeed, "smartAutoFarm")
                                             didLoot = true
@@ -189,13 +189,16 @@ return function(Core)
                                 end
                                 
                                 if didLoot and Core.Toggles.smartAutoFarm then
+                                    -- KEMBALI KE POSISI AWAL (TENGAH) SETELAH LOOT
                                     Core.Pathfinding.aiMoveTo(startPx, startPy, moveSpeed, "smartAutoFarm")
                                     Core.Managers.MovementState.Position = farmStartPos
                                     Core.Managers.MovementState.OldPosition = farmStartPos
                                 end
                             end
                         end
-                        -- Akhir satu siklus penuh, loop akan mengulang kembali ke awal (PLACE)
+                        -- ==========================================================
+                        -- AKHIR SIKLUS: Otomatis memutar kembali ke FASE 1
+                        -- ==========================================================
                     else
                         Core.Toggles.smartAutoFarm = false
                         if updateSmartFarmToggle then updateSmartFarmToggle() end
@@ -203,6 +206,7 @@ return function(Core)
                         task.wait(1)
                     end
                 else
+                    -- KETIKA DIMATIKAN OLEH PEMAIN: Reset Variabel dan Lepas Anchor
                     farmStartPos = nil
                     local char = Core.LocalPlayer.Character
                     local hrp = char and (char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart)
