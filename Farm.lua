@@ -5,6 +5,8 @@ return function(Core)
     Core.UI.createInventoryDropdown("Item to Place", "smartFarmItem", secSmartFarm)
     Core.UI.createInputRow("Hit Count", "25", secSmartFarm, 0.35, "smartFarmHitCount")
     Core.UI.createInputRow("Delay Break (ms)", "250", secSmartFarm, 0.35, "smartFarmDelayBox")
+    Core.UI.createInputRow("Delay Collect (ms)", "350", secSmartFarm, 0.35, "smartFarmDelayCollect")
+    Core.UI.createInputRow("Collect Speed (ms)", "100", secSmartFarm, 0.35, "smartFarmCollectSpeed")
     Core.UI.createToggle("Enable Smart Farm Engine", "smartAutoFarm", secSmartFarm, false)
 
     local secPlanter = Core.UI.createSection(Core.Pages.Farm, "Auto Planter (Custom Base)")
@@ -111,13 +113,12 @@ return function(Core)
                             end
 
                             if hasBlock then
-                                -- MENGAMBIL NILAI HIT COUNT DARI TEXTBOX
                                 local hitsToSend = tonumber(Core.Inputs["smartFarmHitCount"] and Core.Inputs["smartFarmHitCount"].Text) or 25
                                 for i = 1, hitsToSend do Core.Remotes.PlayerFistRemote:FireServer(targetGrid) end
                                 
-                                -- MENGAMBIL NILAI DELAY BREAK (MS) DARI TEXTBOX
-                                local delayBreakMs = tonumber(Core.Inputs["smartFarmDelayBox"] and Core.Inputs["smartFarmDelayBox"].Text) or 250
-                                task.wait(delayBreakMs / 1000)
+                                -- DELAY COLLECT: Menunggu server memunculkan item drop
+                                local delayCollectMs = tonumber(Core.Inputs["smartFarmDelayCollect"] and Core.Inputs["smartFarmDelayCollect"].Text) or 350
+                                task.wait(delayCollectMs / 1000)
                                 
                                 -- [INTEGRASI IF ELSE: AUTO LOOT]
                                 local dropsFolder = workspace:FindFirstChild("Drops") or workspace:FindFirstChild("DroppedItems") or workspace:FindFirstChild("Items")
@@ -137,8 +138,11 @@ return function(Core)
                                         local posB = b:IsA("BasePart") and b.Position or (b:IsA("Model") and b.PrimaryPart and b.PrimaryPart.Position) or Vector3.new(9999,9999,9999)
                                         return (pPos - posA).Magnitude < (pPos - posB).Magnitude
                                     end)
+                                    
                                     local moveSpeed = 45
                                     local didLoot = false
+                                    local collectSpeedMs = tonumber(Core.Inputs["smartFarmCollectSpeed"] and Core.Inputs["smartFarmCollectSpeed"].Text) or 100
+                                    
                                     for _, item in ipairs(itemsToLoot) do
                                         if not Core.Toggles.smartAutoFarm then break end
                                         local part = item:IsA("BasePart") and item or (item:IsA("Model") and item.PrimaryPart)
@@ -149,6 +153,8 @@ return function(Core)
                                             if distFromStart <= 10 and not Core.Pathfinding.isOutOfBounds(endX, endY) and not Core.Pathfinding.isItemTrapped(endX, endY) then
                                                 Core.Pathfinding.aiMoveTo(endX, endY, moveSpeed, "smartAutoFarm")
                                                 didLoot = true
+                                                -- COLLECT SPEED: Jeda saat memungut item beruntun
+                                                task.wait(collectSpeedMs / 1000)
                                             end
                                         end
                                     end
@@ -178,8 +184,9 @@ return function(Core)
                         Core.Toggles.smartAutoFarm = false; print("[NLight] Harap pilih minimal satu Grid melalui tombol 'Select Grid Farm'!"); task.wait(1)
                     end
                     
-                    -- Memberikan sedikit jeda loop jika di fase place agar tidak terlalu spam
-                    if farmPhase == "PLACE" then task.wait() end
+                    -- DELAY BREAK: Jeda sebelum mengeksekusi blok berikutnya
+                    local delayBreakMs = tonumber(Core.Inputs["smartFarmDelayBox"] and Core.Inputs["smartFarmDelayBox"].Text) or 250
+                    if delayBreakMs > 0 then task.wait(delayBreakMs / 1000) else task.wait() end
                 else
                     farmStartPos = nil; farmPhase = "PLACE"; farmIndex = 1
                     local char = Core.LocalPlayer.Character
