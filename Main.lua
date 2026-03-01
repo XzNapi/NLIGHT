@@ -437,7 +437,7 @@ local Core = {
     UI = { createSection = createSection, createToggle = createToggle, createInputRow = createInputRow, createDropdown = createDropdown, createInventoryDropdown = createInventoryDropdown, createButton = createButton, createLabelDisplay = createLabelDisplay, popupOverlay = popupOverlay },
     Utils = { TILE_SIZE = TILE_SIZE, getGridFromScreen = getGridFromScreen, getBaseId = getBaseId, getHeldItem = getHeldItem },
     Pathfinding = { aiMoveTo = aiMoveTo, isOutOfBounds = isOutOfBounds, isItemTrapped = isItemTrapped, blacklistedItems = blacklistedItems, blacklistedSpots = blacklistedSpots },
-    Pages = { Move = pageMove, Farm = pageFarm, World = pageWorld, Misc = pageMisc }
+    Pages = { Move = pageMove, Farm = pageFarm, World = pageWorld, Misc = pageMisc, Pabrik = pagePabrik }
 }
 
 -- [!] GANTI URL DI BAWAH INI DENGAN RAW URL GITHUB REPOSITORY KAMU
@@ -452,3 +452,4 @@ loadModule("Move")
 loadModule("Farm")
 loadModule("World")
 loadModule("Misc")
+loadModule("Pabrik")
