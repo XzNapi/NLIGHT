@@ -1,4 +1,3 @@
-
 return function(Core)
     -- UI SETUP
     local secSmartFarm = Core.UI.createSection(Core.Pages.Farm, "Smart Auto-Farm Engine")
@@ -325,7 +324,7 @@ return function(Core)
                         
                         if Core.Pathfinding.aiMoveTo(targetSpot.x, targetSpot.y, moveSpeed, "autoPlanter") then
                             Core.Remotes.PlayerPlaceRemote:FireServer(Vector2.new(targetSpot.x, targetSpot.y), slotIndexToSend)
-                            task.wait(0.03)
+                            task.wait(0.1)
                         else
                             Core.Pathfinding.blacklistedSpots[targetSpot.x..","..targetSpot.y] = true
                         end
@@ -383,7 +382,7 @@ return function(Core)
                             local hitsToSend = Core.Toggles.oneHitBreak and (tonumber(Core.Inputs["hitMultiplierBox"] and Core.Inputs["hitMultiplierBox"].Text or "25") or 25) or 1
                             for i = 1, hitsToSend do Core.Remotes.PlayerFistRemote:FireServer(Vector2.new(targetSpot.x, targetSpot.y)) end
                             if not Core.Toggles.antiLag and Core.Managers.PCM and Core.Managers.PCM.SpawnHitParticle then Core.Managers.PCM.SpawnHitParticle(Vector3.new(targetSpot.x * Core.Utils.TILE_SIZE, targetSpot.y * Core.Utils.TILE_SIZE, 0)) end
-                            task.wait(0.03)
+                            task.wait(0.1)
                         else
                             Core.Pathfinding.blacklistedSpots[targetSpot.x..","..targetSpot.y] = true
                         end
