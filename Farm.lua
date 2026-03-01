@@ -27,6 +27,7 @@ return function(Core)
     -- SMART AUTO FARM ENGINE (AI STATE MACHINE)
     local farmPhase = "PLACE" -- Siklus dijamin mulai dari menanam
     local farmStartPos = nil
+    local isOutOfItems = false -- Variabel penanda apakah item habis
 
     task.spawn(function()
         while task.wait() do
@@ -54,7 +55,6 @@ return function(Core)
                     if #targetList > 0 then
                         -- ==========================================================
                         -- FASE 1: PLACE ITEM (DARI KANAN KE KIRI)
-                        -- (Fase Break & Loot Mati)
                         -- ==========================================================
                         if farmPhase == "PLACE" then
                             -- Urutkan Target: Kanan ke Kiri (X Terbesar ke Terkecil)
@@ -63,7 +63,6 @@ return function(Core)
                                 return a.dy > b.dy 
                             end)
 
-                            local placedAny = false
                             local itemHabis = false
 
                             for i = 1, #targetList do
@@ -104,7 +103,6 @@ return function(Core)
                                     
                                     if slotIndexToSend then 
                                         Core.Remotes.PlayerPlaceRemote:FireServer(targetGrid, slotIndexToSend)
-                                        placedAny = true
                                         task.wait(0.05) -- Tanam mengalir mulus dengan cepat
                                     else
                                         itemHabis = true
@@ -113,24 +111,18 @@ return function(Core)
                                 end
                             end
                             
-                            -- JIKA ITEM HABIS, MATIKAN AUTO FARM SEPENUHNYA
+                            -- JIKA ITEM HABIS, LANJUTKAN KE BREAK LALU LOOT SEBAGAI SIKLUS TERAKHIR
                             if itemHabis then
-                                print("[NLight] Smart Auto-Farm: Item habis atau tidak ditemukan. Bot AI dihentikan.")
-                                Core.Toggles.smartAutoFarm = false
-                                if updateSmartFarmToggle then updateSmartFarmToggle() end
-                                farmStartPos = nil; farmPhase = "PLACE"
-                                if hrp and hrp.Anchored then hrp.Anchored = false end
-                                return
-                            end
-
-                            -- JIKA SEMUA GRID SUDAH ADA BLOCK (Tidak ada yang di-place putaran ini) -> MASUK FASE BREAK
-                            if not placedAny then
+                                print("[NLight] Smart Auto-Farm: Item habis! Masuk ke fase panen terakhir...")
+                                isOutOfItems = true
+                                farmPhase = "BREAK"
+                            else
+                                -- Jika sukses sweep Kanan-Kiri, lanjut ke fase Break
                                 farmPhase = "BREAK"
                             end
 
                         -- ==========================================================
                         -- FASE 2: BREAK ITEM (DARI KANAN KE KIRI - SATU PER SATU)
-                        -- (Fase Place & Loot Mati)
                         -- ==========================================================
                         elseif farmPhase == "BREAK" then
                             -- Urutkan Target: Kanan ke Kiri (X Terbesar ke Terkecil)
@@ -173,7 +165,6 @@ return function(Core)
 
                         -- ==========================================================
                         -- FASE 3: LOOT ITEM (DARI KIRI KE KANAN)
-                        -- (Fase Place & Break Mati)
                         -- ==========================================================
                         elseif farmPhase == "LOOT" then
                             task.wait(0.3) -- Tunggu server merender drop item sejenak
@@ -224,8 +215,19 @@ return function(Core)
                                 end
                             end
                             
-                            -- FASE LOOT SELESAI, RESTART SIKLUS KE PLACE
-                            farmPhase = "PLACE"
+                            -- CEK APAKAH ITEM HABIS DI FASE PLACE SEBELUMNYA
+                            if isOutOfItems then
+                                print("[NLight] Smart Auto-Farm: Siklus terakhir selesai. Bot dimatikan.")
+                                Core.Toggles.smartAutoFarm = false
+                                if updateSmartFarmToggle then updateSmartFarmToggle() end
+                                farmStartPos = nil
+                                farmPhase = "PLACE"
+                                isOutOfItems = false
+                                if hrp and hrp.Anchored then hrp.Anchored = false end
+                            else
+                                -- FASE LOOT SELESAI, RESTART SIKLUS KE PLACE
+                                farmPhase = "PLACE"
+                            end
                         end
                     else
                         Core.Toggles.smartAutoFarm = false
@@ -237,6 +239,7 @@ return function(Core)
                     -- KETIKA TOGGLE DIMATIKAN: Reset Otak AI dan Un-Anchor
                     farmStartPos = nil
                     farmPhase = "PLACE"
+                    isOutOfItems = false
                     local char = Core.LocalPlayer.Character
                     local hrp = char and (char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart)
                     if hrp and hrp.Anchored then hrp.Anchored = false end
