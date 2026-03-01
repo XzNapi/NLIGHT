@@ -352,15 +352,18 @@ end
 
 local function isTileSolidForPathfinding(x, y)
     if not WorldManager or not WorldManager.GetTile then return false end
-    local tileId = WorldManager.GetTile(x, y, 1); if not tileId then return false end
-    if passableTilesCache[tileId] then return false end; if solidTilesCache[tileId] then return true end
+    local tileId = WorldManager.GetTile(x, y, 1)
+    if not tileId then return false end
+    if passableTilesCache[tileId] then return false end
+    if solidTilesCache[tileId] then return true end
     local name = string.lower(tostring((ItemsManager and ItemsManager.ItemsData and ItemsManager.ItemsData[tileId] and ItemsManager.ItemsData[tileId].Name) or tileId))
-    if string.find(name, "sapling") then passableTilesCache[tileId] = true; return false end
-    solidTilesCache[tileId] = true; return true
-end
-
-local function isItemTrapped(x, y)
-    return isTileSolidForPathfinding(x, y) or (isTileSolidForPathfinding(x, y + 1) and isTileSolidForPathfinding(x, y - 1) and isTileSolidForPathfinding(x + 1, y) and isTileSolidForPathfinding(x - 1, y))
+   
+    if string.find(name, "sapling") then 
+        passableTilesCache[tileId] = true 
+        return false 
+    end
+    solidTilesCache[tileId] = true 
+    return true
 end
 
 local function isLineOfSightClear(x0, y0, x1, y1)
