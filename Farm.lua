@@ -1,6 +1,4 @@
 return function(Core)
-    local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
     -- UI SETUP
     local secSmartFarm = Core.UI.createSection(Core.Pages.Farm, "Smart Auto-Farm Engine")
     Core.UI.createButton("Select Grid Farm", secSmartFarm, function() Core.UI.popupOverlay.Visible = true end)
@@ -26,127 +24,104 @@ return function(Core)
     Core.UI.createToggle("Radar Item Drop", "itemRadar", secLoot, false)
     Core.UI.createToggle("Enable Auto-Loot", "autoLoot", secLoot, false) 
 
-    -- FITUR AUTO DROP ITEM (BYPASS LIMIT 200 & HIDE UI)
+    -- FITUR BARU: AUTO DROP ITEM (LOOP & ANTI-UI POPUP)
     local secDrop = Core.UI.createSection(Core.Pages.Farm, "Auto Drop Item")
     Core.UI.createInventoryDropdown("Select Item", "dropItemSelect", secDrop)
-    local dropAmtBox = Core.UI.createInputRow("Amount to Drop", "1", secDrop, 0.35, "dropAmountBox")
-    
-    local isDroppingItem = false -- Variabel kunci untuk mematikan UI game
-
-    -- Fungsi Eksekutor Drop 2 Langkah
-    local function executeDropChunk(slotIndex, amount)
-        pcall(function()
-            local playerDropRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("PlayerDrop")
-            local promptRemote = ReplicatedStorage:WaitForChild("Managers"):WaitForChild("UIManager"):WaitForChild("UIPromptEvent")
-            
-            playerDropRemote:FireServer(slotIndex)
-            task.wait(0.05) 
-            
-            promptRemote:FireServer({
-                ButtonAction = "drp",
-                Inputs = { amt = tostring(amount) }
-            })
-            task.wait(0.15) 
-        end)
-    end
-
-    -- Loop UI Suppressor (Berjalan di latar belakang menyembunyikan UI Prompt)
-    task.spawn(function()
-        while task.wait() do
-            if isDroppingItem then
-                pcall(function()
-                    for _, v in ipairs(Core.LocalPlayer.PlayerGui:GetDescendants()) do
-                        local name = string.lower(v.Name)
-                        -- Jika menemukan UI Prompt bawaan game, langsung sembunyikan!
-                        if (v:IsA("Frame") or v:IsA("ImageLabel")) and (string.find(name, "prompt") or string.find(name, "drop") or string.find(name, "amount")) then
-                            if v.Visible then v.Visible = false end
-                        end
-                        if v:IsA("ScreenGui") and string.find(name, "prompt") then
-                            if v.Enabled then v.Enabled = false end
-                        end
-                    end
-                end)
-            else
-                task.wait(0.1)
-            end
-        end
-    end)
-
-    Core.UI.createButton("Drop Specified Amount", secDrop, function()
-        local targetStr = string.lower(Core.Toggles.dropItemSelect or "auto")
-        if targetStr == "auto" or targetStr == "" then targetStr = Core.Utils.getHeldItem() end
-        if not targetStr then return end
-
-        local amtToDrop = tonumber(dropAmtBox.Text) or 1
-        
-        isDroppingItem = true -- Nyalakan penahan UI
-        if Core.Managers.InventoryModule and Core.Managers.InventoryModule.Stacks then
-            for i = 1, (Core.Managers.InventoryModule.MaxSlots or 100) do
-                if amtToDrop <= 0 then break end
-                local stackInfo = Core.Managers.InventoryModule.Stacks[i]
-                if stackInfo and stackInfo.Id and stackInfo.Amount and stackInfo.Amount > 0 then
-                    local currentID = string.lower(tostring(stackInfo.Id))
-                    local itemName = currentID
-                    if Core.Managers.ItemsManager and Core.Managers.ItemsManager.ItemsData and Core.Managers.ItemsManager.ItemsData[tostring(stackInfo.Id)] then
-                        itemName = string.lower(tostring(Core.Managers.ItemsManager.ItemsData[tostring(stackInfo.Id)].Name or currentID))
-                    end
-                    
-                    if currentID == targetStr or itemName == targetStr then
-                        local stackLeft = stackInfo.Amount
-                        while stackLeft > 0 and amtToDrop > 0 do
-                            local dropNow = math.min(amtToDrop, stackLeft, 200)
-                            executeDropChunk(i, dropNow)
-                            
-                            amtToDrop = amtToDrop - dropNow
-                            stackLeft = stackLeft - dropNow
-                            task.wait(0.1)
-                        end
-                    end
-                end
-            end
-        end
-        task.delay(0.5, function() isDroppingItem = false end) -- Matikan penahan UI
-    end)
-
-    Core.UI.createButton("Drop ALL of Selected", secDrop, function()
-        local targetStr = string.lower(Core.Toggles.dropItemSelect or "auto")
-        if targetStr == "auto" or targetStr == "" then targetStr = Core.Utils.getHeldItem() end
-        if not targetStr then return end
-
-        isDroppingItem = true -- Nyalakan penahan UI
-        if Core.Managers.InventoryModule and Core.Managers.InventoryModule.Stacks then
-            for i = 1, (Core.Managers.InventoryModule.MaxSlots or 100) do
-                local stackInfo = Core.Managers.InventoryModule.Stacks[i]
-                if stackInfo and stackInfo.Id and stackInfo.Amount and stackInfo.Amount > 0 then
-                    local currentID = string.lower(tostring(stackInfo.Id))
-                    local itemName = currentID
-                    if Core.Managers.ItemsManager and Core.Managers.ItemsManager.ItemsData and Core.Managers.ItemsManager.ItemsData[tostring(stackInfo.Id)] then
-                        itemName = string.lower(tostring(Core.Managers.ItemsManager.ItemsData[tostring(stackInfo.Id)].Name or currentID))
-                    end
-                    
-                    if currentID == targetStr or itemName == targetStr then
-                        local stackLeft = stackInfo.Amount
-                        while stackLeft > 0 do
-                            local dropNow = math.min(stackLeft, 200)
-                            executeDropChunk(i, dropNow)
-                            stackLeft = stackLeft - dropNow
-                            task.wait(0.1)
-                        end
-                    end
-                end
-            end
-        end
-        task.delay(0.5, function() isDroppingItem = false end) -- Matikan penahan UI
-    end)
-    
-    Core.UI.createToggle("Enable Auto Drop (Loop)", "autoDrop", secDrop, false)
+    local dropAmtBox = Core.UI.createInputRow("Amount Per Drop (Max 200)", "200", secDrop, 0.35, "dropAmountBox")
+    local updateDropToggle = Core.UI.createToggle("Enable Auto Drop", "autoDrop", secDrop, false)
 
 
     -- =========================================================================
     -- LOGIC & ENGINE
     -- =========================================================================
 
-    -- SMART AUTO FARM ENGINE (AI STATE MACHINE)
+    -- [SYSTEM AUTO DROP]
+    task.spawn(function()
+        -- 1. Anti-UI Popup (Menghilangkan tampilan Prompt Drop Bawaan Game)
+        Core.RS.RenderStepped:Connect(function()
+            if Core.Toggles.autoDrop then
+                pcall(function()
+                    for _, gui in ipairs(Core.LocalPlayer.PlayerGui:GetDescendants()) do
+                        if gui:IsA("Frame") and gui.Visible then
+                            local name = string.lower(gui.Name)
+                            -- Jika game memunculkan Frame dengan nama 'prompt', 'drop', dsb. akan langsung disembunyikan
+                            if name == "uiprompt" or name == "prompt" or name == "drop" or name == "dialog" or name == "dropframe" then
+                                gui.Visible = false
+                            end
+                        end
+                    end
+                end)
+            end
+        end)
+
+        -- 2. Looping Auto Drop Logic
+        while task.wait(0.1) do
+            pcall(function()
+                if Core.Toggles.autoDrop then
+                    local playerDropRemote = Core.ReplicatedStorage:FindFirstChild("Remotes") and Core.ReplicatedStorage.Remotes:FindFirstChild("PlayerDrop")
+                    local promptRemote = Core.ReplicatedStorage:FindFirstChild("Managers") and Core.ReplicatedStorage.Managers:FindFirstChild("UIManager") and Core.ReplicatedStorage.Managers.UIManager:FindFirstChild("UIPromptEvent")
+                    
+                    if not playerDropRemote or not promptRemote then return end
+
+                    local targetStr = string.lower(Core.Toggles.dropItemSelect or "auto")
+                    if targetStr == "auto" or targetStr == "" then targetStr = Core.Utils.getHeldItem() end
+                    if not targetStr then return end
+
+                    -- Kunci Limit: Memastikan input tidak pernah bisa melebihi 200
+                    local amtInput = tonumber(dropAmtBox.Text) or 200
+                    if amtInput > 200 then 
+                        amtInput = 200 
+                        dropAmtBox.Text = "200" -- Koreksi angka di Textbox agar user tahu
+                    end
+                    if amtInput <= 0 then amtInput = 1 end
+
+                    local foundAny = false
+
+                    if Core.Managers.InventoryModule and Core.Managers.InventoryModule.Stacks then
+                        for i = 1, (Core.Managers.InventoryModule.MaxSlots or 100) do
+                            if not Core.Toggles.autoDrop then break end
+                            local stackInfo = Core.Managers.InventoryModule.Stacks[i]
+                            
+                            if stackInfo and stackInfo.Id and stackInfo.Amount and stackInfo.Amount > 0 then
+                                local currentID = string.lower(tostring(stackInfo.Id))
+                                local itemName = currentID
+                                if Core.Managers.ItemsManager and Core.Managers.ItemsManager.ItemsData and Core.Managers.ItemsManager.ItemsData[tostring(stackInfo.Id)] then
+                                    itemName = string.lower(tostring(Core.Managers.ItemsManager.ItemsData[tostring(stackInfo.Id)].Name or currentID))
+                                end
+                                
+                                if currentID == targetStr or itemName == targetStr then
+                                    foundAny = true
+                                    local dropNow = math.min(stackInfo.Amount, amtInput)
+                                    
+                                    -- Eksekusi Remote Langkah 1 (Pilih Slot)
+                                    playerDropRemote:FireServer(i)
+                                    task.wait(0.05)
+                                    
+                                    -- Eksekusi Remote Langkah 2 (Konfirmasi Jumlah Drop)
+                                    promptRemote:FireServer({
+                                        ButtonAction = "drp",
+                                        Inputs = { amt = tostring(dropNow) }
+                                    })
+                                    
+                                    task.wait(0.2) -- Jeda aman agar server game tidak mendeteksi spam ping
+                                end
+                            end
+                        end
+                    end
+
+                    -- Matikan toggle otomatis jika inventory sudah benar-benar kosong dari item tersebut
+                    if not foundAny then
+                        Core.Toggles.autoDrop = false
+                        if updateDropToggle then updateDropToggle() end
+                        print("[NLight] Auto Drop: Item habis dari tas. Bot dimatikan.")
+                    end
+                end
+            end)
+        end
+    end)
+
+
+    -- [SMART AUTO FARM ENGINE - AI STATE MACHINE]
     local farmPhase = "PLACE" 
     local farmStartPos = nil
     local isOutOfItems = false 
@@ -345,7 +320,7 @@ return function(Core)
         end
     end)
 
-    -- AUTO PLANTER
+    -- [AUTO PLANTER]
     task.spawn(function()
         while task.wait() do
             pcall(function()
@@ -423,7 +398,7 @@ return function(Core)
         end
     end)
 
-    -- AUTO BREAKER
+    -- [AUTO BREAKER]
     task.spawn(function()
         while task.wait() do
             pcall(function()
@@ -474,82 +449,6 @@ return function(Core)
                             task.wait(0.1)
                         else
                             Core.Pathfinding.blacklistedSpots[targetSpot.x..","..targetSpot.y] = true
-                        end
-                    end
-                end
-            end)
-        end
-    end)
-
-    -- GENIUS AUTO LOOT (Global)
-    task.spawn(function()
-        while task.wait(0.1) do
-            pcall(function()
-                if Core.Toggles.autoLoot and Core.Managers.MovementState then
-                    local pPos = Core.Managers.MovementState.Position
-                    local dropsFolder = workspace:FindFirstChild("Drops") or workspace:FindFirstChild("DroppedItems") or workspace:FindFirstChild("Items")
-                    local itemsToLoot = {}
-                    if dropsFolder then
-                        for _, v in ipairs(dropsFolder:GetChildren()) do
-                            if (v:IsA("BasePart") or v:IsA("Model")) and not Core.Pathfinding.blacklistedItems[v] then table.insert(itemsToLoot, v) end
-                        end
-                    else
-                        for _, obj in ipairs(workspace:GetChildren()) do
-                            if obj:IsA("BasePart") and not obj:IsDescendantOf(Core.LocalPlayer.Character) and not Core.Players:GetPlayerFromCharacter(obj.Parent) and obj.Size.Y < 3 and not Core.Pathfinding.blacklistedItems[obj] then table.insert(itemsToLoot, obj) end
-                        end
-                    end
-                    if #itemsToLoot > 0 then
-                        table.sort(itemsToLoot, function(a, b)
-                            local posA = a:IsA("BasePart") and a.Position or (a:IsA("Model") and a.PrimaryPart and a.PrimaryPart.Position) or Vector3.new(9999,9999,9999)
-                            local posB = b:IsA("BasePart") and b.Position or (b:IsA("Model") and b.PrimaryPart and b.PrimaryPart.Position) or Vector3.new(9999,9999,9999)
-                            return (pPos - posA).Magnitude < (pPos - posB).Magnitude
-                        end)
-                        local moveSpeed = tonumber(Core.Inputs["lootSpeedBox"] and Core.Inputs["lootSpeedBox"].Text or "45") or 45
-                        for _, item in ipairs(itemsToLoot) do
-                            if not Core.Toggles.autoLoot then break end
-                            local part = item:IsA("BasePart") and item or (item:IsA("Model") and item.PrimaryPart)
-                            if part and part.Parent then
-                                local endX = math.floor(part.Position.X / Core.Utils.TILE_SIZE + 0.5)
-                                local endY = math.floor(part.Position.Y / Core.Utils.TILE_SIZE + 0.5)
-                                if Core.Pathfinding.isOutOfBounds(endX, endY) or Core.Pathfinding.isItemTrapped(endX, endY) then
-                                    Core.Pathfinding.blacklistedItems[item] = true
-                                else
-                                    if not Core.Pathfinding.aiMoveTo(endX, endY, moveSpeed, "autoLoot") then Core.Pathfinding.blacklistedItems[item] = true end
-                                end
-                            end
-                        end
-                    end
-                end
-            end)
-        end
-    end)
-    
-    -- LOOP AUTO DROP
-    task.spawn(function()
-        while task.wait(0.5) do
-            pcall(function()
-                if Core.Toggles.autoDrop then
-                    local targetStr = string.lower(Core.Toggles.dropItemSelect or "auto")
-                    if targetStr == "auto" or targetStr == "" then targetStr = Core.Utils.getHeldItem() end
-                    if not targetStr then return end
-
-                    if Core.Managers.InventoryModule and Core.Managers.InventoryModule.Stacks then
-                        for i = 1, (Core.Managers.InventoryModule.MaxSlots or 100) do
-                            local stackInfo = Core.Managers.InventoryModule.Stacks[i]
-                            if stackInfo and stackInfo.Id and stackInfo.Amount and stackInfo.Amount > 0 then
-                                local currentID = string.lower(tostring(stackInfo.Id))
-                                local itemName = currentID
-                                if Core.Managers.ItemsManager and Core.Managers.ItemsManager.ItemsData and Core.Managers.ItemsManager.ItemsData[tostring(stackInfo.Id)] then
-                                    itemName = string.lower(tostring(Core.Managers.ItemsManager.ItemsData[tostring(stackInfo.Id)].Name or currentID))
-                                end
-                                if currentID == targetStr or itemName == targetStr then
-                                    isDroppingItem = true
-                                    local dropNow = math.min(stackInfo.Amount, 200)
-                                    executeDropChunk(i, dropNow)
-                                    task.delay(0.5, function() isDroppingItem = false end)
-                                    task.wait(0.2)
-                                end
-                            end
                         end
                     end
                 end
