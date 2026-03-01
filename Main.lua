@@ -230,7 +230,6 @@ local function createLabelDisplay(text, parent)
     return lbl
 end
 
--- UPDATE PENTING: MENAMBAHKAN PARAMETER filterFunc
 local function createInventoryDropdown(labelTxt, stateKey, parent, callback, filterFunc)
     local container = Instance.new("Frame", parent)
     container.Size = UDim2.new(0.92, 0, 0, 40); container.BackgroundColor3 = Theme.Item; container.ClipsDescendants = true; container.ZIndex = 6; Instance.new("UICorner", container).CornerRadius = UDim.new(0, 6)
@@ -253,11 +252,8 @@ local function createInventoryDropdown(labelTxt, stateKey, parent, callback, fil
                         local itemId = tostring(stackInfo.Id)
                         local itemName = ItemsManager and ItemsManager.ItemsData and ItemsManager.ItemsData[itemId] and ItemsManager.ItemsData[itemId].Name or itemId
                         
-                        -- CEK FILTER FUNC DISINI
                         local isAllowed = true
-                        if filterFunc then
-                            isAllowed = filterFunc(string.lower(itemName), string.lower(itemId))
-                        end
+                        if filterFunc then isAllowed = filterFunc(string.lower(itemName), string.lower(itemId)) end
                         
                         if isAllowed and not addedItems[itemName] then 
                             table.insert(rawItems, itemName)
@@ -338,7 +334,7 @@ local pageMisc = createTab("Misc")
 tabButtons[1].TextColor3 = Theme.Text; pageMove.Visible = true; task.spawn(function() task.wait(0.1); activeIndicator.Position = UDim2.new(0, tabButtons[1].AbsolutePosition.X - frame.AbsolutePosition.X, 0, 85); activeIndicator.Size = UDim2.new(0, tabButtons[1].AbsoluteSize.X, 0, 3) end)
 
 -- ==========================================
--- PATHFINDING CORE
+-- PATHFINDING CORE (REVISI KESEPAKATAN)
 -- ==========================================
 local blacklistedItems, blacklistedSpots, passableTilesCache, solidTilesCache = {}, {}, {}, {}
 task.spawn(function() while task.wait(5) do blacklistedSpots = {}; blacklistedItems = {}; passableTilesCache = {}; solidTilesCache = {} end end)
@@ -350,12 +346,24 @@ local function isOutOfBounds(x, y)
     return false
 end
 
+-- PERBAIKAN OTAK AI: Membaca 'sapling' DAN 'seed' sebagai benda kosong (tembus)
 local function isTileSolidForPathfinding(x, y)
     if not WorldManager or not WorldManager.GetTile then return false end
     local tileId = WorldManager.GetTile(x, y, 1); if not tileId then return false end
     if passableTilesCache[tileId] then return false end; if solidTilesCache[tileId] then return true end
-    local name = string.lower(tostring((ItemsManager and ItemsManager.ItemsData and ItemsManager.ItemsData[tileId] and ItemsManager.ItemsData[tileId].Name) or tileId))
-    if string.find(name, "sapling") then passableTilesCache[tileId] = true; return false end
+    
+    local name = tostring(tileId)
+    if ItemsManager and ItemsManager.ItemsData and ItemsManager.ItemsData[tileId] then
+        name = tostring(ItemsManager.ItemsData[tileId].Name or name)
+    end
+    name = string.lower(name)
+    
+    -- KESEPAKATAN: Hanya Sapling & Seed yang di-ignore/ditembus
+    if string.find(name, "sapling") or string.find(name, "seed") then 
+        passableTilesCache[tileId] = true 
+        return false 
+    end
+    
     solidTilesCache[tileId] = true; return true
 end
 
@@ -431,6 +439,28 @@ local function aiMoveTo(endX, endY, moveSpeed, toggleKey)
     end
     return false
 end
+
+-- ==========================================
+-- SAPLING & SEED NOCLIP ENGINE (FISIK)
+-- Mencegah karakter dipantulkan ke atas
+-- ==========================================
+task.spawn(function()
+    while task.wait(0.5) do
+        pcall(function()
+            for _, obj in ipairs(workspace:GetChildren()) do
+                if obj:IsA("Model") or obj:IsA("BasePart") then
+                    local n = string.lower(obj.Name)
+                    if string.find(n, "sapling") or string.find(n, "seed") then
+                        if obj:IsA("BasePart") then obj.CanCollide = false end
+                        for _, child in ipairs(obj:GetDescendants()) do
+                            if child:IsA("BasePart") then child.CanCollide = false end
+                        end
+                    end
+                end
+            end
+        end)
+    end
+end)
 
 -- ==========================================
 -- INJEKSI MODULE (CORE ENVIRONMENT)
