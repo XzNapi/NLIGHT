@@ -3,7 +3,8 @@ return function(Core)
     local secSmartFarm = Core.UI.createSection(Core.Pages.Farm, "Smart Auto-Farm Engine")
     Core.UI.createButton("Select Grid Farm", secSmartFarm, function() Core.UI.popupOverlay.Visible = true end)
     Core.UI.createInventoryDropdown("Item to Place", "smartFarmItem", secSmartFarm)
-    Core.UI.createInputRow("Delay Break (Sec)", "0.15", secSmartFarm, 0.35, "smartFarmDelayBox")
+    Core.UI.createInputRow("Delay Next (Sec)", "0.15", secSmartFarm, 0.35, "smartFarmDelayBox")
+    Core.UI.createInputRow("Hit Speed (ms)", "0", secSmartFarm, 0.35, "smartFarmHitSpeed")
     Core.UI.createInputRow("Hits Per Break", "25", secSmartFarm, 0.35, "smartFarmHitsBox")
     Core.UI.createToggle("Enable Smart Farm Engine", "smartAutoFarm", secSmartFarm, false)
 
@@ -16,9 +17,10 @@ return function(Core)
     local secBreaker = Core.UI.createSection(Core.Pages.Farm, "Auto Breaker (Zig-Zag)")
     Core.UI.createInventoryDropdown("Target to Break", "breakerTarget", secBreaker)
     Core.UI.createInputRow("Move Speed", "45", secBreaker, 0.35, "breakerSpeedBox")
-    Core.UI.createToggle("Enable Auto Breaker", "autoBreaker", secBreaker, false)
+    Core.UI.createInputRow("Hit Speed (ms)", "0", secBreaker, 0.35, "breakerHitSpeed")
     Core.UI.createInputRow("Hit Spam / Break", "25", secBreaker, 0.35, "hitMultiplierBox")
     Core.UI.createToggle("One Hit Break (Burst)", "oneHitBreak", secBreaker, true)
+    Core.UI.createToggle("Enable Auto Breaker", "autoBreaker", secBreaker, false)
 
     local secLoot = Core.UI.createSection(Core.Pages.Farm, "Genius Auto-Loot")
     Core.UI.createInputRow("AI Run Speed", "45", secLoot, 0.35, "lootSpeedBox") 
@@ -111,19 +113,30 @@ return function(Core)
 
                             if hasBlock then
                                 local hitsToSend = tonumber(Core.Inputs["smartFarmHitsBox"] and Core.Inputs["smartFarmHitsBox"].Text) or 25
-                                for i = 1, hitsToSend do Core.Remotes.PlayerFistRemote:FireServer(targetGrid) end
-                                task.wait(0.25)
+                                local hitSpeedMs = tonumber(Core.Inputs["smartFarmHitSpeed"] and Core.Inputs["smartFarmHitSpeed"].Text) or 0
                                 
+                                for i = 1, hitsToSend do 
+                                    Core.Remotes.PlayerFistRemote:FireServer(targetGrid) 
+                                    if hitSpeedMs > 0 then task.wait(hitSpeedMs / 1000) end
+                                end
+                                
+                                task.wait(0.25) -- Jeda agar item drop spawn di server
+                                
+                                -- [INTEGRASI IF ELSE: AUTO LOOT]
                                 local dropsFolder = workspace:FindFirstChild("Drops") or workspace:FindFirstChild("DroppedItems") or workspace:FindFirstChild("Items")
                                 local itemsToLoot = {}
+                                
                                 if dropsFolder then
-                                    for _, v in ipairs(dropsFolder:GetChildren()) do if v:IsA("BasePart") or v:IsA("Model") then table.insert(itemsToLoot, v) end end
+                                    for _, v in ipairs(dropsFolder:GetChildren()) do
+                                        if v:IsA("BasePart") or v:IsA("Model") then table.insert(itemsToLoot, v) end
+                                    end
                                 else
                                     for _, obj in ipairs(workspace:GetChildren()) do
                                         if obj:IsA("BasePart") and not obj:IsDescendantOf(char) and not Core.Players:GetPlayerFromCharacter(obj.Parent) and obj.Size.Y < 3 then table.insert(itemsToLoot, obj) end
                                     end
                                 end
                                 
+                                -- IF ADA ITEM DROP
                                 if #itemsToLoot > 0 then
                                     local pPos = Core.Managers.MovementState.Position
                                     table.sort(itemsToLoot, function(a, b)
@@ -131,7 +144,7 @@ return function(Core)
                                         local posB = b:IsA("BasePart") and b.Position or (b:IsA("Model") and b.PrimaryPart and b.PrimaryPart.Position) or Vector3.new(9999,9999,9999)
                                         return (pPos - posA).Magnitude < (pPos - posB).Magnitude
                                     end)
-                                    local moveSpeed = 45
+                                    local moveSpeed = tonumber(Core.Inputs["lootSpeedBox"] and Core.Inputs["lootSpeedBox"].Text) or 45
                                     local didLoot = false
                                     for _, item in ipairs(itemsToLoot) do
                                         if not Core.Toggles.smartAutoFarm then break end
@@ -151,6 +164,8 @@ return function(Core)
                                         Core.Managers.MovementState.Position = farmStartPos
                                         Core.Managers.MovementState.OldPosition = farmStartPos
                                     end
+                                else
+                                    -- ELSE: TIDAK ADA DROP, LANJUTKAN NORMAL
                                 end
                             end
                             
@@ -173,9 +188,8 @@ return function(Core)
                     else
                         Core.Toggles.smartAutoFarm = false; print("[NLight] Harap pilih minimal satu Grid melalui tombol 'Select Grid Farm'!"); task.wait(1)
                     end
-                    local delayBreak = tonumber(Core.Inputs["smartFarmDelayBox"] and Core.Inputs["smartFarmDelayBox"].Text) or 0.15
-                    if delayBreak > 0 then task.wait(delayBreak) end
                 else
+                    -- RESET & UN-ANCHOR KETIKA DIMATIKAN
                     farmStartPos = nil; farmPhase = "PLACE"; farmIndex = 1
                     local char = Core.LocalPlayer.Character
                     local hrp = char and (char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart)
@@ -309,7 +323,12 @@ return function(Core)
                         
                         if Core.Pathfinding.aiMoveTo(targetSpot.x, targetSpot.y, moveSpeed, "autoBreaker") then
                             local hitsToSend = Core.Toggles.oneHitBreak and (tonumber(Core.Inputs["hitMultiplierBox"] and Core.Inputs["hitMultiplierBox"].Text or "25") or 25) or 1
-                            for i = 1, hitsToSend do Core.Remotes.PlayerFistRemote:FireServer(Vector2.new(targetSpot.x, targetSpot.y)) end
+                            local hitSpeedMs = tonumber(Core.Inputs["breakerHitSpeed"] and Core.Inputs["breakerHitSpeed"].Text) or 0
+                            
+                            for i = 1, hitsToSend do 
+                                Core.Remotes.PlayerFistRemote:FireServer(Vector2.new(targetSpot.x, targetSpot.y)) 
+                                if hitSpeedMs > 0 then task.wait(hitSpeedMs / 1000) end
+                            end
                             if not Core.Toggles.antiLag and Core.Managers.PCM and Core.Managers.PCM.SpawnHitParticle then Core.Managers.PCM.SpawnHitParticle(Vector3.new(targetSpot.x * Core.Utils.TILE_SIZE, targetSpot.y * Core.Utils.TILE_SIZE, 0)) end
                             task.wait(0.1)
                         else
