@@ -21,7 +21,9 @@ return function(Core)
     end)
     Core.UI.createToggle("Hide Player Names", "hideNames", secVisual, false)
 
-    local secAdmin = Core.UI.createSection(Core.Pages.Misc, "Admin & Spoofing")
+    local secAdmin = Core.UI.createSection(Core.Pages.Misc, "Admin & Security")
+    -- FITUR BARU: Mod Detector (Toggle berwarna merah/danger)
+    Core.UI.createToggle("Mod Detector (Auto-Disconnect)", "modDetector", secAdmin, true)
     Core.UI.createToggle("Fake VIP (Cosmetic)", "fakeVip", secAdmin, false, function(state)
         pcall(function()
             if state then
@@ -45,7 +47,54 @@ return function(Core)
         end)
     end)
 
+    -- ==========================================
     -- LOGIC & LOOPS
+    -- ==========================================
+
+    -- [SISTEM KEAMANAN: MOD DETECTOR]
+    -- Fungsi untuk mengecek apakah player tersebut adalah Staff/Mod
+    local function isMod(player)
+        if player == Core.LocalPlayer then return false end
+        local prefix = tostring(player:GetAttribute("namePrefix") or "")
+        local name = player.Name
+        local display = player.DisplayName
+        
+        -- Deteksi simbol "@" di Username, DisplayName, atau Custom Role Prefix
+        if string.find(name, "@") or string.find(display, "@") or string.find(prefix, "@") then
+            return true
+        end
+        return false
+    end
+
+    -- Trigger saat ada pemain BARU masuk ke server
+    Core.Players.PlayerAdded:Connect(function(player)
+        if Core.Toggles.modDetector then
+            task.wait(1) -- Beri waktu sejenak agar attribute role game termuat
+            pcall(function()
+                if isMod(player) then
+                    Core.LocalPlayer:Kick("\n[🛡️ NLight Security]\nMod/Admin (" .. player.Name .. ") terdeteksi masuk ke World!\nSistem otomatis memutuskan koneksi untuk menghindari Banned.")
+                end
+            end)
+        end
+    end)
+
+    -- Loop Scanner (Untuk mengecek player yang SUDAH ADA saat kamu masuk, atau jika role mereka tiba-tiba berubah)
+    task.spawn(function()
+        while task.wait(1) do
+            pcall(function()
+                if Core.Toggles.modDetector then
+                    for _, p in ipairs(Core.Players:GetPlayers()) do
+                        if isMod(p) then
+                            Core.LocalPlayer:Kick("\n[🛡️ NLight Security]\nMod/Admin (" .. p.Name .. ") terdeteksi di dalam World!\nSistem otomatis memutuskan koneksi untuk menghindari Banned.")
+                            break
+                        end
+                    end
+                end
+            end)
+        end
+    end)
+
+    -- [SISTEM CHAT SPAM]
     task.spawn(function()
         while task.wait() do
             pcall(function()
@@ -63,6 +112,7 @@ return function(Core)
         end
     end)
 
+    -- [SISTEM SPY REMOTES]
     task.spawn(function()
         if Core.Remotes.CBRemote and Core.Remotes.SignalConstructor and type(Core.Remotes.SignalConstructor) == "function" then
             pcall(function()
@@ -100,6 +150,7 @@ return function(Core)
         end
     end)
 
+    -- [SISTEM CHAT SPY]
     task.spawn(function()
         if Core.TextChatService then
             Core.TextChatService.MessageReceived:Connect(function(textChatMessage)
@@ -117,6 +168,7 @@ return function(Core)
         end
     end)
 
+    -- [SISTEM HIDE NAMES]
     task.spawn(function()
         while task.wait(1) do
             pcall(function()
