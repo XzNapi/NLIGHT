@@ -3,12 +3,10 @@ return function(Core)
     local secSmartFarm = Core.UI.createSection(Core.Pages.Farm, "Smart Auto-Farm Engine")
     Core.UI.createButton("Select Grid Farm", secSmartFarm, function() Core.UI.popupOverlay.Visible = true end)
     
-    -- MENGGUNAKAN FILTER BARU KHUSUS BLOCK (Mencegah sapling & seed masuk dropdown)
+    -- Filter agar sapling/seed tidak masuk ke dropdown Place
     Core.UI.createInventoryDropdown("Item to Place", "smartFarmItem", secSmartFarm, nil, function(itemName, itemId)
-        local n = string.lower(itemName)
-        local id = string.lower(itemId)
-        if string.find(n, "sapling") or string.find(id, "sapling") then return false end
-        if string.find(n, "seed") or string.find(id, "seed") then return false end
+        local n = string.lower(itemName); local id = string.lower(itemId)
+        if string.find(n, "sapling") or string.find(id, "sapling") or string.find(n, "seed") or string.find(id, "seed") then return false end
         return true
     end)
     
@@ -33,14 +31,87 @@ return function(Core)
     Core.UI.createToggle("Radar Item Drop", "itemRadar", secLoot, false)
     Core.UI.createToggle("Enable Auto-Loot", "autoLoot", secLoot, false) 
 
+    -- FITUR BARU: INVENTORY & DROP MANAGER
+    local secDrop = Core.UI.createSection(Core.Pages.Farm, "Inventory & Drop Manager")
+    Core.UI.createInventoryDropdown("Item to Drop", "dropTargetItem", secDrop)
+    local dropAmtBox = Core.UI.createInputRow("Amount to Drop", "200", secDrop, 0.35, "dropAmountBox")
+    
+    -- Fungsi Eksekusi Drop (Bypass Limit 200)
+    local function executeDrop(targetStr, totalToDrop)
+        if not targetStr or targetStr == "" then return end
+        if Core.Managers.InventoryModule and Core.Managers.InventoryModule.Stacks then
+            for i = 1, (Core.Managers.InventoryModule.MaxSlots or 100) do
+                if totalToDrop <= 0 then break end
+                local stackInfo = Core.Managers.InventoryModule.Stacks[i]
+                if stackInfo and stackInfo.Id and stackInfo.Amount and stackInfo.Amount > 0 then
+                    local currentID = string.lower(tostring(stackInfo.Id))
+                    local itemName = currentID
+                    if Core.Managers.ItemsManager and Core.Managers.ItemsManager.ItemsData and Core.Managers.ItemsManager.ItemsData[tostring(stackInfo.Id)] then
+                        itemName = string.lower(tostring(Core.Managers.ItemsManager.ItemsData[tostring(stackInfo.Id)].Name or currentID))
+                    end
+                    
+                    if currentID == targetStr or itemName == targetStr then
+                        local stackLeft = stackInfo.Amount
+                        -- Memecah jumlah drop jika lebih dari 200
+                        while stackLeft > 0 and totalToDrop > 0 do
+                            local dropNow = math.min(totalToDrop, stackLeft, 200) 
+                            pcall(function()
+                                local ReplicatedStorage = game:GetService("ReplicatedStorage")
+                                local playerDropRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("PlayerDrop")
+                                local promptRemote = ReplicatedStorage:WaitForChild("Managers"):WaitForChild("UIManager"):WaitForChild("UIPromptEvent")
+                                
+                                playerDropRemote:FireServer(i)
+                                task.wait(0.05)
+                                promptRemote:FireServer({
+                                    ButtonAction = "drp",
+                                    Inputs = { amt = tostring(dropNow) }
+                                })
+                                task.wait(0.1) -- Jeda aman antar drop
+                            end)
+                            totalToDrop = totalToDrop - dropNow
+                            stackLeft = stackLeft - dropNow
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    -- Tombol Drop Manual Sesuai Jumlah Textbox
+    Core.UI.createButton("Drop Amount Now", secDrop, function()
+        local target = string.lower(Core.Toggles.dropTargetItem or "auto")
+        if target == "auto" then target = Core.Utils.getHeldItem() end
+        local amt = tonumber(dropAmtBox.Text) or 200
+        
+        -- Dijalankan di thread terpisah agar tidak freeze UI
+        task.spawn(function()
+            executeDrop(target, amt)
+        end)
+    end)
+
+    -- Toggle Auto Drop Loop (Mendeteksi & membuang item secara otomatis)
+    Core.UI.createToggle("Auto Drop (Loop)", "autoDropLoop", secDrop, false)
+
     -- =========================================================================
     -- LOGIC & ENGINE
     -- =========================================================================
 
-    -- SMART AUTO FARM ENGINE (AI STATE MACHINE)
-    local farmPhase = "PLACE" -- Siklus dijamin mulai dari menanam
+    -- 1. LOOP AUTO DROP ITEM
+    task.spawn(function()
+        while task.wait(1) do
+            if Core.Toggles.autoDropLoop then
+                local target = string.lower(Core.Toggles.dropTargetItem or "auto")
+                if target == "auto" then target = Core.Utils.getHeldItem() end
+                local amt = tonumber(dropAmtBox.Text) or 200
+                executeDrop(target, amt)
+            end
+        end
+    end)
+
+    -- 2. SMART AUTO FARM ENGINE (AI STATE MACHINE MASTERPIECE)
+    local farmPhase = "PLACE" 
     local farmStartPos = nil
-    local isOutOfItems = false -- Variabel penanda apakah item habis
+    local isOutOfItems = false 
 
     task.spawn(function()
         while task.wait() do
@@ -66,9 +137,7 @@ return function(Core)
                     end
                     
                     if #targetList > 0 then
-                        -- ==========================================================
-                        -- FASE 1: PLACE ITEM (DARI KANAN KE KIRI)
-                        -- ==========================================================
+                        -- FASE 1: PLACE ITEM
                         if farmPhase == "PLACE" then
                             table.sort(targetList, function(a, b)
                                 if a.dy == b.dy then return a.dx > b.dx end
@@ -107,7 +176,6 @@ return function(Core)
                                                     itemName = string.lower(tostring(Core.Managers.ItemsManager.ItemsData[tostring(stackInfo.Id)].Name or currentID))
                                                 end
                                                 
-                                                -- LOGIKA AI DIPERKETAT: Abaikan Sapling/Seed saat menaruh Block!
                                                 if not string.find(currentID, "sapling") and not string.find(itemName, "sapling") and not string.find(currentID, "seed") and not string.find(itemName, "seed") then
                                                     local baseID = Core.Utils.getBaseId(currentID) 
                                                     if baseID == targetStringID or currentID == targetStringID or itemName == targetStringID then 
@@ -141,9 +209,7 @@ return function(Core)
                                 farmPhase = "BREAK"
                             end
 
-                        -- ==========================================================
-                        -- FASE 2: BREAK ITEM (DARI KANAN KE KIRI - SATU PER SATU)
-                        -- ==========================================================
+                        -- FASE 2: BREAK ITEM
                         elseif farmPhase == "BREAK" then
                             table.sort(targetList, function(a, b)
                                 if a.dy == b.dy then return a.dx > b.dx end
@@ -166,7 +232,6 @@ return function(Core)
                                 if hasBlock then
                                     local hitsToSend = 25 
                                     for j = 1, hitsToSend do Core.Remotes.PlayerFistRemote:FireServer(targetGrid) end
-                                    
                                     task.wait(delayBreakMs / 1000)
                                     brokeAny = true
                                     break 
@@ -177,9 +242,7 @@ return function(Core)
                                 farmPhase = "LOOT"
                             end
 
-                        -- ==========================================================
-                        -- FASE 3: LOOT ITEM (DARI KIRI KE KANAN)
-                        -- ==========================================================
+                        -- FASE 3: LOOT ITEM
                         elseif farmPhase == "LOOT" then
                             task.wait(0.3) 
 
