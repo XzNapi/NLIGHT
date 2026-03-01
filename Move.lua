@@ -5,6 +5,7 @@ return function(Core)
 
     local secChar = Core.UI.createSection(Core.Pages.Move, "Character")
     Core.UI.createToggle("God Mode (Invincible)", "godMode", secChar)
+    Core.UI.createToggle("Anti Punch (No Knockback)", "antiPunch", secChar) -- FITUR BARU DITAMBAHKAN DI SINI
     Core.UI.createToggle("Admin Teleport (Click)", "devTeleport", secChar)
 
     local secMove = Core.UI.createSection(Core.Pages.Move, "Movement Adjustments")
@@ -37,16 +38,32 @@ return function(Core)
 
     Core.RS.RenderStepped:Connect(function()
         pcall(function()
+            -- GOD MODE LOGIC
             if Core.Toggles.godMode and Core.LocalPlayer.Character and Core.LocalPlayer.Character:FindFirstChild("Humanoid") then 
                 Core.LocalPlayer.Character.Humanoid.Health = Core.LocalPlayer.Character.Humanoid.MaxHealth 
             end
+            
             if Core.Managers.MovementState then
+                -- ANTI PUNCH LOGIC (Mencegah pergeseran dari luar)
+                if Core.Toggles.antiPunch then
+                    -- Jika player tidak menekan tombol jalan (A/D), kunci Velocity X agar tidak bisa didorong
+                    if Core.Managers.MovementState.MoveX == 0 then
+                        Core.Managers.MovementState.VelocityX = 0
+                    end
+                    -- Bersihkan variabel knockback jika game menggunakannya
+                    Core.Managers.MovementState.KnockbackX = 0
+                    Core.Managers.MovementState.KnockbackY = 0
+                end
+                
+                -- SPEED & MOVEMENT LOGIC
                 if Core.Toggles.speed and Core.Managers.MovementState.MoveX ~= 0 then 
                     Core.Managers.MovementState.VelocityX = Core.Managers.MovementState.MoveX * (tonumber(Core.Inputs["speedBox"] and Core.Inputs["speedBox"].Text) or 2.0) 
                 end
+                
                 if Core.Toggles.infJump then 
                     Core.Managers.MovementState.RemainingJumps = 999; Core.Managers.MovementState.MaxJump = 999 
                 end
+                
                 if Core.Toggles.fly then 
                     Core.Managers.MovementState.VelocityY = 0
                     if isHoldingSpace then 
