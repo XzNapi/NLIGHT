@@ -24,22 +24,42 @@ return function(Core)
     Core.UI.createToggle("Radar Item Drop", "itemRadar", secLoot, false)
     Core.UI.createToggle("Enable Auto-Loot", "autoLoot", secLoot, false) 
 
-    -- FITUR BARU: AUTO DROP ITEM
+    -- FITUR BARU: AUTO DROP ITEM (DUA TAHAP)
     local secDrop = Core.UI.createSection(Core.Pages.Farm, "Auto Drop Item")
     Core.UI.createInventoryDropdown("Select Item", "dropItemSelect", secDrop)
     local dropAmtBox = Core.UI.createInputRow("Amount to Drop", "1", secDrop, 0.35, "dropAmountBox")
     
-    local function getDropRemote()
-        local remotes = Core.ReplicatedStorage:FindFirstChild("Remotes")
-        if remotes then
-            return remotes:FindFirstChild("PlayerDropItem") or remotes:FindFirstChild("PlayerDrop") or remotes:FindFirstChild("DropItem")
-        end
-        return nil
+    -- Fungsi Helper untuk menembakkan 2 Remote sekaligus (Pilih Slot -> Konfirmasi Jumlah)
+    local function doDropItem(slotIndex, amount)
+        pcall(function()
+            local remotes = Core.ReplicatedStorage:FindFirstChild("Remotes")
+            local playerDrop = remotes and remotes:FindFirstChild("PlayerDrop")
+            
+            local managers = Core.ReplicatedStorage:FindFirstChild("Managers")
+            local uiManager = managers and managers:FindFirstChild("UIManager")
+            local uiPromptEvent = uiManager and uiManager:FindFirstChild("UIPromptEvent")
+
+            if playerDrop and uiPromptEvent then
+                -- Tahap 1: Beritahu server slot mana yang mau di-drop
+                playerDrop:FireServer(slotIndex)
+                
+                -- Beri jeda sepersekian detik agar game memproses UI-nya
+                task.wait(0.1) 
+                
+                -- Tahap 2: Beritahu server jumlah yang ingin di-drop (Bypass UI Prompt)
+                uiPromptEvent:FireServer({
+                    ButtonAction = "drp",
+                    Inputs = {
+                        amt = tostring(amount)
+                    }
+                })
+            else
+                warn("[NLight] Remote PlayerDrop atau UIPromptEvent tidak ditemukan!")
+            end
+        end)
     end
 
     Core.UI.createButton("Drop Specified Amount", secDrop, function()
-        local remote = getDropRemote()
-        if not remote then print("[NLight] Drop Remote tidak ditemukan!") return end
         local targetStr = string.lower(Core.Toggles.dropItemSelect or "auto")
         if targetStr == "auto" or targetStr == "" then targetStr = Core.Utils.getHeldItem() end
         if not targetStr then return end
@@ -58,9 +78,9 @@ return function(Core)
                     end
                     if currentID == targetStr or itemName == targetStr then
                         local dropNow = math.min(amtToDrop, stackInfo.Amount)
-                        remote:FireServer(i, dropNow)
+                        doDropItem(i, dropNow)
                         amtToDrop = amtToDrop - dropNow
-                        task.wait(0.05)
+                        task.wait(0.2) -- Jeda aman antar pembuangan
                     end
                 end
             end
@@ -68,8 +88,6 @@ return function(Core)
     end)
 
     Core.UI.createButton("Drop ALL of Selected", secDrop, function()
-        local remote = getDropRemote()
-        if not remote then print("[NLight] Drop Remote tidak ditemukan!") return end
         local targetStr = string.lower(Core.Toggles.dropItemSelect or "auto")
         if targetStr == "auto" or targetStr == "" then targetStr = Core.Utils.getHeldItem() end
         if not targetStr then return end
@@ -84,8 +102,8 @@ return function(Core)
                         itemName = string.lower(tostring(Core.Managers.ItemsManager.ItemsData[tostring(stackInfo.Id)].Name or currentID))
                     end
                     if currentID == targetStr or itemName == targetStr then
-                        remote:FireServer(i, stackInfo.Amount) -- Langsung drop semua isi slot ini
-                        task.wait(0.05)
+                        doDropItem(i, stackInfo.Amount) -- Buang semua di slot ini
+                        task.wait(0.2)
                     end
                 end
             end
@@ -489,9 +507,6 @@ return function(Core)
         while task.wait(0.5) do
             pcall(function()
                 if Core.Toggles.autoDrop then
-                    local remote = getDropRemote()
-                    if not remote then return end
-                    
                     local targetStr = string.lower(Core.Toggles.dropItemSelect or "auto")
                     if targetStr == "auto" or targetStr == "" then targetStr = Core.Utils.getHeldItem() end
                     if not targetStr then return end
@@ -506,8 +521,8 @@ return function(Core)
                                     itemName = string.lower(tostring(Core.Managers.ItemsManager.ItemsData[tostring(stackInfo.Id)].Name or currentID))
                                 end
                                 if currentID == targetStr or itemName == targetStr then
-                                    remote:FireServer(i, stackInfo.Amount)
-                                    task.wait(0.1)
+                                    doDropItem(i, stackInfo.Amount)
+                                    task.wait(0.2)
                                 end
                             end
                         end
