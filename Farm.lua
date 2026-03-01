@@ -1,4 +1,6 @@
 return function(Core)
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
     -- UI SETUP
     local secSmartFarm = Core.UI.createSection(Core.Pages.Farm, "Smart Auto-Farm Engine")
     Core.UI.createButton("Select Grid Farm", secSmartFarm, function() Core.UI.popupOverlay.Visible = true end)
@@ -24,38 +26,27 @@ return function(Core)
     Core.UI.createToggle("Radar Item Drop", "itemRadar", secLoot, false)
     Core.UI.createToggle("Enable Auto-Loot", "autoLoot", secLoot, false) 
 
-    -- FITUR BARU: AUTO DROP ITEM (DUA TAHAP)
+    -- FITUR AUTO DROP ITEM (BYPASS LIMIT 200)
     local secDrop = Core.UI.createSection(Core.Pages.Farm, "Auto Drop Item")
     Core.UI.createInventoryDropdown("Select Item", "dropItemSelect", secDrop)
     local dropAmtBox = Core.UI.createInputRow("Amount to Drop", "1", secDrop, 0.35, "dropAmountBox")
     
-    -- Fungsi Helper untuk menembakkan 2 Remote sekaligus (Pilih Slot -> Konfirmasi Jumlah)
-    local function doDropItem(slotIndex, amount)
+    -- Fungsi Eksekutor Drop 2 Langkah
+    local function executeDropChunk(slotIndex, amount)
         pcall(function()
-            local remotes = Core.ReplicatedStorage:FindFirstChild("Remotes")
-            local playerDrop = remotes and remotes:FindFirstChild("PlayerDrop")
+            local playerDropRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("PlayerDrop")
+            local promptRemote = ReplicatedStorage:WaitForChild("Managers"):WaitForChild("UIManager"):WaitForChild("UIPromptEvent")
             
-            local managers = Core.ReplicatedStorage:FindFirstChild("Managers")
-            local uiManager = managers and managers:FindFirstChild("UIManager")
-            local uiPromptEvent = uiManager and uiManager:FindFirstChild("UIPromptEvent")
-
-            if playerDrop and uiPromptEvent then
-                -- Tahap 1: Beritahu server slot mana yang mau di-drop
-                playerDrop:FireServer(slotIndex)
-                
-                -- Beri jeda sepersekian detik agar game memproses UI-nya
-                task.wait(0.1) 
-                
-                -- Tahap 2: Beritahu server jumlah yang ingin di-drop (Bypass UI Prompt)
-                uiPromptEvent:FireServer({
-                    ButtonAction = "drp",
-                    Inputs = {
-                        amt = tostring(amount)
-                    }
-                })
-            else
-                warn("[NLight] Remote PlayerDrop atau UIPromptEvent tidak ditemukan!")
-            end
+            -- Langkah 1: Pilih Slot
+            playerDropRemote:FireServer(slotIndex)
+            task.wait(0.05) -- Beri waktu sedikit untuk server merespons
+            
+            -- Langkah 2: Konfirmasi Jumlah Drop
+            promptRemote:FireServer({
+                ButtonAction = "drp",
+                Inputs = { amt = tostring(amount) }
+            })
+            task.wait(0.15) -- Jeda anti-kick spam remote
         end)
     end
 
@@ -76,11 +67,18 @@ return function(Core)
                     if Core.Managers.ItemsManager and Core.Managers.ItemsManager.ItemsData and Core.Managers.ItemsManager.ItemsData[tostring(stackInfo.Id)] then
                         itemName = string.lower(tostring(Core.Managers.ItemsManager.ItemsData[tostring(stackInfo.Id)].Name or currentID))
                     end
+                    
                     if currentID == targetStr or itemName == targetStr then
-                        local dropNow = math.min(amtToDrop, stackInfo.Amount)
-                        doDropItem(i, dropNow)
-                        amtToDrop = amtToDrop - dropNow
-                        task.wait(0.2) -- Jeda aman antar pembuangan
+                        local stackLeft = stackInfo.Amount
+                        -- Looping pemecah chunk maksimal 200 per drop
+                        while stackLeft > 0 and amtToDrop > 0 do
+                            local dropNow = math.min(amtToDrop, stackLeft, 200)
+                            executeDropChunk(i, dropNow)
+                            
+                            amtToDrop = amtToDrop - dropNow
+                            stackLeft = stackLeft - dropNow
+                            task.wait(0.1)
+                        end
                     end
                 end
             end
@@ -101,15 +99,24 @@ return function(Core)
                     if Core.Managers.ItemsManager and Core.Managers.ItemsManager.ItemsData and Core.Managers.ItemsManager.ItemsData[tostring(stackInfo.Id)] then
                         itemName = string.lower(tostring(Core.Managers.ItemsManager.ItemsData[tostring(stackInfo.Id)].Name or currentID))
                     end
+                    
                     if currentID == targetStr or itemName == targetStr then
-                        doDropItem(i, stackInfo.Amount) -- Buang semua di slot ini
-                        task.wait(0.2)
+                        local stackLeft = stackInfo.Amount
+                        -- Looping membuang semua isi slot ini (dipecah per 200)
+                        while stackLeft > 0 do
+                            local dropNow = math.min(stackLeft, 200)
+                            executeDropChunk(i, dropNow)
+                            stackLeft = stackLeft - dropNow
+                            task.wait(0.1)
+                        end
                     end
                 end
             end
         end
     end)
+    
     Core.UI.createToggle("Enable Auto Drop (Loop)", "autoDrop", secDrop, false)
+
 
     -- =========================================================================
     -- LOGIC & ENGINE
@@ -144,9 +151,6 @@ return function(Core)
                     end
                     
                     if #targetList > 0 then
-                        -- ==========================================================
-                        -- FASE 1: PLACE ITEM (DARI KANAN KE KIRI)
-                        -- ==========================================================
                         if farmPhase == "PLACE" then
                             table.sort(targetList, function(a, b)
                                 if a.dy == b.dy then return a.dx > b.dx end
@@ -209,9 +213,6 @@ return function(Core)
                                 farmPhase = "BREAK"
                             end
 
-                        -- ==========================================================
-                        -- FASE 2: BREAK ITEM (DARI KANAN KE KIRI - SATU PER SATU)
-                        -- ==========================================================
                         elseif farmPhase == "BREAK" then
                             table.sort(targetList, function(a, b)
                                 if a.dy == b.dy then return a.dx > b.dx end
@@ -244,9 +245,6 @@ return function(Core)
                                 farmPhase = "LOOT"
                             end
 
-                        -- ==========================================================
-                        -- FASE 3: LOOT ITEM (DARI KIRI KE KANAN)
-                        -- ==========================================================
                         elseif farmPhase == "LOOT" then
                             task.wait(0.3) 
 
@@ -521,7 +519,9 @@ return function(Core)
                                     itemName = string.lower(tostring(Core.Managers.ItemsManager.ItemsData[tostring(stackInfo.Id)].Name or currentID))
                                 end
                                 if currentID == targetStr or itemName == targetStr then
-                                    doDropItem(i, stackInfo.Amount)
+                                    -- Auto Drop membuang max 200 item per putaran loop agar aman
+                                    local dropNow = math.min(stackInfo.Amount, 200)
+                                    executeDropChunk(i, dropNow)
                                     task.wait(0.2)
                                 end
                             end
