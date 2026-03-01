@@ -24,107 +24,14 @@ return function(Core)
     Core.UI.createToggle("Radar Item Drop", "itemRadar", secLoot, false)
     Core.UI.createToggle("Enable Auto-Loot", "autoLoot", secLoot, false) 
 
-    -- FITUR BARU: AUTO DROP ITEM (LOOP & ANTI-UI POPUP)
-    local secDrop = Core.UI.createSection(Core.Pages.Farm, "Auto Drop Item")
-    Core.UI.createInventoryDropdown("Select Item", "dropItemSelect", secDrop)
-    local dropAmtBox = Core.UI.createInputRow("Amount Per Drop (Max 200)", "200", secDrop, 0.35, "dropAmountBox")
-    local updateDropToggle = Core.UI.createToggle("Enable Auto Drop", "autoDrop", secDrop, false)
-
-
     -- =========================================================================
     -- LOGIC & ENGINE
     -- =========================================================================
 
-    -- [SYSTEM AUTO DROP]
-    task.spawn(function()
-        -- 1. Anti-UI Popup (Menghilangkan tampilan Prompt Drop Bawaan Game)
-        Core.RS.RenderStepped:Connect(function()
-            if Core.Toggles.autoDrop then
-                pcall(function()
-                    for _, gui in ipairs(Core.LocalPlayer.PlayerGui:GetDescendants()) do
-                        if gui:IsA("Frame") and gui.Visible then
-                            local name = string.lower(gui.Name)
-                            -- Jika game memunculkan Frame dengan nama 'prompt', 'drop', dsb. akan langsung disembunyikan
-                            if name == "uiprompt" or name == "prompt" or name == "drop" or name == "dialog" or name == "dropframe" then
-                                gui.Visible = false
-                            end
-                        end
-                    end
-                end)
-            end
-        end)
-
-        -- 2. Looping Auto Drop Logic
-        while task.wait(0.1) do
-            pcall(function()
-                if Core.Toggles.autoDrop then
-                    local playerDropRemote = Core.ReplicatedStorage:FindFirstChild("Remotes") and Core.ReplicatedStorage.Remotes:FindFirstChild("PlayerDrop")
-                    local promptRemote = Core.ReplicatedStorage:FindFirstChild("Managers") and Core.ReplicatedStorage.Managers:FindFirstChild("UIManager") and Core.ReplicatedStorage.Managers.UIManager:FindFirstChild("UIPromptEvent")
-                    
-                    if not playerDropRemote or not promptRemote then return end
-
-                    local targetStr = string.lower(Core.Toggles.dropItemSelect or "auto")
-                    if targetStr == "auto" or targetStr == "" then targetStr = Core.Utils.getHeldItem() end
-                    if not targetStr then return end
-
-                    -- Kunci Limit: Memastikan input tidak pernah bisa melebihi 200
-                    local amtInput = tonumber(dropAmtBox.Text) or 200
-                    if amtInput > 200 then 
-                        amtInput = 200 
-                        dropAmtBox.Text = "200" -- Koreksi angka di Textbox agar user tahu
-                    end
-                    if amtInput <= 0 then amtInput = 1 end
-
-                    local foundAny = false
-
-                    if Core.Managers.InventoryModule and Core.Managers.InventoryModule.Stacks then
-                        for i = 1, (Core.Managers.InventoryModule.MaxSlots or 100) do
-                            if not Core.Toggles.autoDrop then break end
-                            local stackInfo = Core.Managers.InventoryModule.Stacks[i]
-                            
-                            if stackInfo and stackInfo.Id and stackInfo.Amount and stackInfo.Amount > 0 then
-                                local currentID = string.lower(tostring(stackInfo.Id))
-                                local itemName = currentID
-                                if Core.Managers.ItemsManager and Core.Managers.ItemsManager.ItemsData and Core.Managers.ItemsManager.ItemsData[tostring(stackInfo.Id)] then
-                                    itemName = string.lower(tostring(Core.Managers.ItemsManager.ItemsData[tostring(stackInfo.Id)].Name or currentID))
-                                end
-                                
-                                if currentID == targetStr or itemName == targetStr then
-                                    foundAny = true
-                                    local dropNow = math.min(stackInfo.Amount, amtInput)
-                                    
-                                    -- Eksekusi Remote Langkah 1 (Pilih Slot)
-                                    playerDropRemote:FireServer(i)
-                                    task.wait(0.05)
-                                    
-                                    -- Eksekusi Remote Langkah 2 (Konfirmasi Jumlah Drop)
-                                    promptRemote:FireServer({
-                                        ButtonAction = "drp",
-                                        Inputs = { amt = tostring(dropNow) }
-                                    })
-                                    
-                                    task.wait(0.2) -- Jeda aman agar server game tidak mendeteksi spam ping
-                                end
-                            end
-                        end
-                    end
-
-                    -- Matikan toggle otomatis jika inventory sudah benar-benar kosong dari item tersebut
-                    if not foundAny then
-                        Core.Toggles.autoDrop = false
-                        if updateDropToggle then updateDropToggle() end
-                        print("[NLight] Auto Drop: Item habis dari tas. Bot dimatikan.")
-                    end
-                end
-            end)
-        end
-    end)
-
-
-    -- [SMART AUTO FARM ENGINE - AI STATE MACHINE]
-    local farmPhase = "PLACE" 
+    -- SMART AUTO FARM ENGINE (AI STATE MACHINE)
+    local farmPhase = "PLACE" -- Siklus dijamin mulai dari menanam
     local farmStartPos = nil
-    local isOutOfItems = false 
+    local isOutOfItems = false -- Variabel penanda apakah item habis
 
     task.spawn(function()
         while task.wait() do
@@ -132,7 +39,7 @@ return function(Core)
                 if Core.Toggles.smartAutoFarm and Core.Managers.MovementState and Core.Remotes.PlayerFistRemote and Core.Remotes.PlayerPlaceRemote then
                     local char = Core.LocalPlayer.Character
                     local hrp = char and (char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart)
-                    if hrp and not hrp.Anchored then hrp.Anchored = true end 
+                    if hrp and not hrp.Anchored then hrp.Anchored = true end -- Kunci Visual Karakter
                     
                     if not farmStartPos then farmStartPos = Core.Managers.MovementState.Position end
                     local startPx = math.floor(farmStartPos.X / Core.Utils.TILE_SIZE + 0.5)
@@ -150,13 +57,18 @@ return function(Core)
                     end
                     
                     if #targetList > 0 then
+                        -- ==========================================================
+                        -- FASE 1: PLACE ITEM (DARI KANAN KE KIRI)
+                        -- ==========================================================
                         if farmPhase == "PLACE" then
+                            -- Urutkan Target: Kanan ke Kiri (X Terbesar ke Terkecil)
                             table.sort(targetList, function(a, b)
                                 if a.dy == b.dy then return a.dx > b.dx end
                                 return a.dy > b.dy 
                             end)
 
                             local itemHabis = false
+                            local placedAny = false
 
                             for i = 1, #targetList do
                                 if not Core.Toggles.smartAutoFarm then break end 
@@ -196,7 +108,8 @@ return function(Core)
                                     
                                     if slotIndexToSend then 
                                         Core.Remotes.PlayerPlaceRemote:FireServer(targetGrid, slotIndexToSend)
-                                        task.wait(0.05) 
+                                        placedAny = true
+                                        task.wait(0.05) -- Tanam mengalir mulus dengan cepat
                                     else
                                         itemHabis = true
                                         break
@@ -204,15 +117,21 @@ return function(Core)
                                 end
                             end
                             
+                            -- JIKA ITEM HABIS, LANJUTKAN KE BREAK LALU LOOT SEBAGAI SIKLUS TERAKHIR
                             if itemHabis then
                                 print("[NLight] Smart Auto-Farm: Item habis! Masuk ke fase panen terakhir...")
                                 isOutOfItems = true
                                 farmPhase = "BREAK"
-                            else
+                            elseif not placedAny then
+                                -- Jika sukses sweep Kanan-Kiri atau penuh, lanjut ke fase Break
                                 farmPhase = "BREAK"
                             end
 
+                        -- ==========================================================
+                        -- FASE 2: BREAK ITEM (DARI KANAN KE KIRI - SATU PER SATU)
+                        -- ==========================================================
                         elseif farmPhase == "BREAK" then
+                            -- Urutkan Target: Kanan ke Kiri (X Terbesar ke Terkecil)
                             table.sort(targetList, function(a, b)
                                 if a.dy == b.dy then return a.dx > b.dx end
                                 return a.dy > b.dy 
@@ -232,20 +151,29 @@ return function(Core)
                                 end
 
                                 if hasBlock then
+                                    -- Bot memukul target INI secara spesifik
                                     local hitsToSend = 25 
                                     for j = 1, hitsToSend do Core.Remotes.PlayerFistRemote:FireServer(targetGrid) end
+                                    
                                     task.wait(delayBreakMs / 1000)
                                     brokeAny = true
+                                    
+                                    -- STOP LOOP DI SINI (BREAK INNER LOOP). 
+                                    -- AI Akan fokus menghancurkan SATU blok ini sampai hancur lebur sebelum maju ke blok di sebelahnya.
                                     break 
                                 end
                             end
 
+                            -- JIKA SEMUA GRID SUDAH HANCUR (KOSONG) -> MASUK FASE LOOT
                             if not brokeAny then
                                 farmPhase = "LOOT"
                             end
 
+                        -- ==========================================================
+                        -- FASE 3: LOOT ITEM (DARI KIRI KE KANAN)
+                        -- ==========================================================
                         elseif farmPhase == "LOOT" then
-                            task.wait(0.3) 
+                            task.wait(0.3) -- Tunggu server merender drop item sejenak
 
                             local dropsFolder = workspace:FindFirstChild("Drops") or workspace:FindFirstChild("DroppedItems") or workspace:FindFirstChild("Items")
                             local itemsToLoot = {}
@@ -260,6 +188,7 @@ return function(Core)
                             local didLoot = false
 
                             if #itemsToLoot > 0 then
+                                -- URUTKAN DROP ITEM DARI KIRI KE KANAN (X Terkecil ke X Terbesar)
                                 table.sort(itemsToLoot, function(a, b)
                                     local posA = a:IsA("BasePart") and a.Position or (a:IsA("Model") and a.PrimaryPart and a.PrimaryPart.Position) or Vector3.new(9999,9999,9999)
                                     local posB = b:IsA("BasePart") and b.Position or (b:IsA("Model") and b.PrimaryPart and b.PrimaryPart.Position) or Vector3.new(9999,9999,9999)
@@ -276,6 +205,7 @@ return function(Core)
                                         local endY = math.floor(part.Position.Y / Core.Utils.TILE_SIZE + 0.5)
                                         local distFromStart = math.sqrt((endX - startPx)^2 + (endY - startPy)^2)
                                         
+                                        -- Mengambil item yang ada di radius lahan grid (maks radius 15)
                                         if distFromStart <= 15 and not Core.Pathfinding.isOutOfBounds(endX, endY) and not Core.Pathfinding.isItemTrapped(endX, endY) then
                                             Core.Pathfinding.aiMoveTo(endX, endY, moveSpeed, "smartAutoFarm")
                                             didLoot = true
@@ -284,12 +214,14 @@ return function(Core)
                                 end
                                 
                                 if didLoot and Core.Toggles.smartAutoFarm then
+                                    -- KEMBALI KE POSISI TENGAH SETELAH LOOT
                                     Core.Pathfinding.aiMoveTo(startPx, startPy, moveSpeed, "smartAutoFarm")
                                     Core.Managers.MovementState.Position = farmStartPos
                                     Core.Managers.MovementState.OldPosition = farmStartPos
                                 end
                             end
                             
+                            -- CEK APAKAH ITEM HABIS DI FASE PLACE SEBELUMNYA
                             if isOutOfItems then
                                 print("[NLight] Smart Auto-Farm: Siklus terakhir selesai. Bot dimatikan.")
                                 Core.Toggles.smartAutoFarm = false
@@ -299,6 +231,7 @@ return function(Core)
                                 isOutOfItems = false
                                 if hrp and hrp.Anchored then hrp.Anchored = false end
                             else
+                                -- FASE LOOT SELESAI, RESTART SIKLUS KE PLACE
                                 farmPhase = "PLACE"
                             end
                         end
@@ -309,6 +242,7 @@ return function(Core)
                         task.wait(1)
                     end
                 else
+                    -- KETIKA TOGGLE DIMATIKAN: Reset Otak AI dan Un-Anchor
                     farmStartPos = nil
                     farmPhase = "PLACE"
                     isOutOfItems = false
@@ -320,7 +254,7 @@ return function(Core)
         end
     end)
 
-    -- [AUTO PLANTER]
+    -- AUTO PLANTER
     task.spawn(function()
         while task.wait() do
             pcall(function()
@@ -398,7 +332,7 @@ return function(Core)
         end
     end)
 
-    -- [AUTO BREAKER]
+    -- AUTO BREAKER
     task.spawn(function()
         while task.wait() do
             pcall(function()
@@ -449,6 +383,49 @@ return function(Core)
                             task.wait(0.1)
                         else
                             Core.Pathfinding.blacklistedSpots[targetSpot.x..","..targetSpot.y] = true
+                        end
+                    end
+                end
+            end)
+        end
+    end)
+
+    -- GENIUS AUTO LOOT (Global)
+    task.spawn(function()
+        while task.wait(0.1) do
+            pcall(function()
+                if Core.Toggles.autoLoot and Core.Managers.MovementState then
+                    local pPos = Core.Managers.MovementState.Position
+                    local dropsFolder = workspace:FindFirstChild("Drops") or workspace:FindFirstChild("DroppedItems") or workspace:FindFirstChild("Items")
+                    local itemsToLoot = {}
+                    if dropsFolder then
+                        for _, v in ipairs(dropsFolder:GetChildren()) do
+                            if (v:IsA("BasePart") or v:IsA("Model")) and not Core.Pathfinding.blacklistedItems[v] then table.insert(itemsToLoot, v) end
+                        end
+                    else
+                        for _, obj in ipairs(workspace:GetChildren()) do
+                            if obj:IsA("BasePart") and not obj:IsDescendantOf(Core.LocalPlayer.Character) and not Core.Players:GetPlayerFromCharacter(obj.Parent) and obj.Size.Y < 3 and not Core.Pathfinding.blacklistedItems[obj] then table.insert(itemsToLoot, obj) end
+                        end
+                    end
+                    if #itemsToLoot > 0 then
+                        table.sort(itemsToLoot, function(a, b)
+                            local posA = a:IsA("BasePart") and a.Position or (a:IsA("Model") and a.PrimaryPart and a.PrimaryPart.Position) or Vector3.new(9999,9999,9999)
+                            local posB = b:IsA("BasePart") and b.Position or (b:IsA("Model") and b.PrimaryPart and b.PrimaryPart.Position) or Vector3.new(9999,9999,9999)
+                            return (pPos - posA).Magnitude < (pPos - posB).Magnitude
+                        end)
+                        local moveSpeed = tonumber(Core.Inputs["lootSpeedBox"] and Core.Inputs["lootSpeedBox"].Text or "45") or 45
+                        for _, item in ipairs(itemsToLoot) do
+                            if not Core.Toggles.autoLoot then break end
+                            local part = item:IsA("BasePart") and item or (item:IsA("Model") and item.PrimaryPart)
+                            if part and part.Parent then
+                                local endX = math.floor(part.Position.X / Core.Utils.TILE_SIZE + 0.5)
+                                local endY = math.floor(part.Position.Y / Core.Utils.TILE_SIZE + 0.5)
+                                if Core.Pathfinding.isOutOfBounds(endX, endY) or Core.Pathfinding.isItemTrapped(endX, endY) then
+                                    Core.Pathfinding.blacklistedItems[item] = true
+                                else
+                                    if not Core.Pathfinding.aiMoveTo(endX, endY, moveSpeed, "autoLoot") then Core.Pathfinding.blacklistedItems[item] = true end
+                                end
+                            end
                         end
                     end
                 end
