@@ -329,6 +329,7 @@ local pageMove = createTab("Move")
 local pageFarm = createTab("Farm")
 local pageWorld = createTab("World")
 local pageMisc = createTab("Misc")
+local pagePabrik = createTab("Pabrik")
 tabButtons[1].TextColor3 = Theme.Text; pageMove.Visible = true; task.spawn(function() task.wait(0.1); activeIndicator.Position = UDim2.new(0, tabButtons[1].AbsolutePosition.X - frame.AbsolutePosition.X, 0, 85); activeIndicator.Size = UDim2.new(0, tabButtons[1].AbsoluteSize.X, 0, 3) end)
 
 -- ==========================================
@@ -437,7 +438,7 @@ local Core = {
     UI = { createSection = createSection, createToggle = createToggle, createInputRow = createInputRow, createDropdown = createDropdown, createInventoryDropdown = createInventoryDropdown, createButton = createButton, createLabelDisplay = createLabelDisplay, popupOverlay = popupOverlay },
     Utils = { TILE_SIZE = TILE_SIZE, getGridFromScreen = getGridFromScreen, getBaseId = getBaseId, getHeldItem = getHeldItem },
     Pathfinding = { aiMoveTo = aiMoveTo, isOutOfBounds = isOutOfBounds, isItemTrapped = isItemTrapped, blacklistedItems = blacklistedItems, blacklistedSpots = blacklistedSpots },
-    Pages = { Move = pageMove, Farm = pageFarm, World = pageWorld, Misc = pageMisc, Pabrik = pagePabrik }
+    Pages = { Move = pageMove, Farm = pageFarm, World = pageWorld, Misc = pageMisc, Pabrik = pagePabrik } -- TAMBAHKAN Pabrik DI SINI
 }
 
 -- [!] GANTI URL DI BAWAH INI DENGAN RAW URL GITHUB REPOSITORY KAMU
@@ -452,3 +453,4 @@ loadModule("Move")
 loadModule("Farm")
 loadModule("World")
 loadModule("Misc")
+loadModule("Pabrik")
