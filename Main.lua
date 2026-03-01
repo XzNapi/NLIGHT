@@ -419,7 +419,7 @@ local Core = {
 }
 
 -- [!] GANTI URL DI BAWAH INI DENGAN RAW URL GITHUB REPOSITORY KAMU
-local GITHUB_REPO = "https://raw.githubusercontent.com/NAMA_GITHUB_KAMU/NAMA_REPO_KAMU/main/"
+local GITHUB_REPO = "https://github.com/XzNapi/NLIGHT/tree/main"
 
 local function loadModule(name)
     local success, result = pcall(function() return loadstring(game:HttpGet(GITHUB_REPO .. name .. ".lua"))() end)
