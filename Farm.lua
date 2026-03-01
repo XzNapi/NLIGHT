@@ -3,10 +3,11 @@ return function(Core)
     local secSmartFarm = Core.UI.createSection(Core.Pages.Farm, "Smart Auto-Farm Engine")
     Core.UI.createButton("Select Grid Farm", secSmartFarm, function() Core.UI.popupOverlay.Visible = true end)
     Core.UI.createInventoryDropdown("Item to Place", "smartFarmItem", secSmartFarm)
+    Core.UI.createInputRow("Hit Count", "25", secSmartFarm, 0.35, "smartFarmHitCount")
     Core.UI.createInputRow("Delay Break (ms)", "250", secSmartFarm, 0.35, "smartFarmDelayBox")
     Core.UI.createInputRow("Delay Collect (ms)", "350", secSmartFarm, 0.35, "smartFarmDelayCollect")
     Core.UI.createInputRow("Collect Speed (ms)", "100", secSmartFarm, 0.35, "smartFarmCollectSpeed")
-    Core.UI.createToggle("Enable Smart Farm Engine", "smartAutoFarm", secSmartFarm, false)
+    local updateSmartFarmToggle = Core.UI.createToggle("Enable Smart Farm Engine", "smartAutoFarm", secSmartFarm, false)
 
     local secPlanter = Core.UI.createSection(Core.Pages.Farm, "Auto Planter (Custom Base)")
     Core.UI.createInventoryDropdown("Base Block", "planterBase", secPlanter)
@@ -27,7 +28,7 @@ return function(Core)
     Core.UI.createToggle("Enable Auto-Loot", "autoLoot", secLoot, false) 
 
     -- SMART AUTO FARM ENGINE
-    local farmPhase = "PLACE"
+    local farmPhase = "PLACE" -- Dimulai dari fase PLACE
     local farmIndex = 1
     local farmStartPos = nil
 
@@ -55,11 +56,15 @@ return function(Core)
                     end
                     
                     if #targetList > 0 then
+                        -- URUTKAN DARI KIRI KE KANAN (X terkecil ke X terbesar)
                         table.sort(targetList, function(a, b)
                             if a.dy == b.dy then return a.dx < b.dx end
                             return a.dy > b.dy 
                         end)
                         
+                        -- =============================
+                        -- FASE 1: PLACE ITEM (KIRI KE KANAN)
+                        -- =============================
                         if farmPhase == "PLACE" then
                             if farmIndex > #targetList then farmIndex = 1 end
                             local targetX, targetY = targetList[farmIndex].x, targetList[farmIndex].y
@@ -95,12 +100,29 @@ return function(Core)
                                     end
                                     slotIndexToSend = exactMatch or partialMatch
                                 end
+                                
+                                -- JIKA ITEM HABIS, MATIKAN AUTO FARM
+                                if not slotIndexToSend then
+                                    print("[NLight] Smart Auto-Farm: Item habis atau tidak ditemukan. Bot berhenti.")
+                                    Core.Toggles.smartAutoFarm = false
+                                    if updateSmartFarmToggle then updateSmartFarmToggle() end
+                                    farmStartPos = nil; farmPhase = "PLACE"; farmIndex = 1
+                                    if hrp and hrp.Anchored then hrp.Anchored = false end
+                                    return
+                                end
+
                                 if slotIndexToSend then Core.Remotes.PlayerPlaceRemote:FireServer(targetGrid, slotIndexToSend) end
                             end
                             
                             farmIndex = farmIndex + 1
-                            if farmIndex > #targetList then farmPhase = "BREAK"; farmIndex = 1 end
+                            if farmIndex > #targetList then 
+                                farmPhase = "BREAK" -- Lanjut ke fase BREAK
+                                farmIndex = 1 
+                            end
                             
+                        -- =============================
+                        -- FASE 2: BREAK ITEM (KIRI KE KANAN)
+                        -- =============================
                         elseif farmPhase == "BREAK" then
                             if farmIndex > #targetList then farmIndex = 1 end
                             local targetX, targetY = targetList[farmIndex].x, targetList[farmIndex].y
@@ -112,80 +134,83 @@ return function(Core)
                             end
 
                             if hasBlock then
-                                local hitsToSend = 25 -- Default hit count secara internal
+                                local hitsToSend = tonumber(Core.Inputs["smartFarmHitCount"] and Core.Inputs["smartFarmHitCount"].Text) or 25
                                 for i = 1, hitsToSend do Core.Remotes.PlayerFistRemote:FireServer(targetGrid) end
                                 
-                                -- DELAY COLLECT: Menunggu server memunculkan item drop
-                                local delayCollectMs = tonumber(Core.Inputs["smartFarmDelayCollect"] and Core.Inputs["smartFarmDelayCollect"].Text) or 350
-                                task.wait(delayCollectMs / 1000)
-                                
-                                -- [INTEGRASI IF ELSE: AUTO LOOT]
-                                local dropsFolder = workspace:FindFirstChild("Drops") or workspace:FindFirstChild("DroppedItems") or workspace:FindFirstChild("Items")
-                                local itemsToLoot = {}
-                                if dropsFolder then
-                                    for _, v in ipairs(dropsFolder:GetChildren()) do if v:IsA("BasePart") or v:IsA("Model") then table.insert(itemsToLoot, v) end end
-                                else
-                                    for _, obj in ipairs(workspace:GetChildren()) do
-                                        if obj:IsA("BasePart") and not obj:IsDescendantOf(char) and not Core.Players:GetPlayerFromCharacter(obj.Parent) and obj.Size.Y < 3 then table.insert(itemsToLoot, obj) end
-                                    end
-                                end
-                                
-                                if #itemsToLoot > 0 then
-                                    local pPos = Core.Managers.MovementState.Position
-                                    table.sort(itemsToLoot, function(a, b)
-                                        local posA = a:IsA("BasePart") and a.Position or (a:IsA("Model") and a.PrimaryPart and a.PrimaryPart.Position) or Vector3.new(9999,9999,9999)
-                                        local posB = b:IsA("BasePart") and b.Position or (b:IsA("Model") and b.PrimaryPart and b.PrimaryPart.Position) or Vector3.new(9999,9999,9999)
-                                        return (pPos - posA).Magnitude < (pPos - posB).Magnitude
-                                    end)
-                                    
-                                    local moveSpeed = 45
-                                    local didLoot = false
-                                    local collectSpeedMs = tonumber(Core.Inputs["smartFarmCollectSpeed"] and Core.Inputs["smartFarmCollectSpeed"].Text) or 100
-                                    
-                                    for _, item in ipairs(itemsToLoot) do
-                                        if not Core.Toggles.smartAutoFarm then break end
-                                        local part = item:IsA("BasePart") and item or (item:IsA("Model") and item.PrimaryPart)
-                                        if part and part.Parent then
-                                            local endX = math.floor(part.Position.X / Core.Utils.TILE_SIZE + 0.5)
-                                            local endY = math.floor(part.Position.Y / Core.Utils.TILE_SIZE + 0.5)
-                                            local distFromStart = math.sqrt((endX - startPx)^2 + (endY - startPy)^2)
-                                            if distFromStart <= 10 and not Core.Pathfinding.isOutOfBounds(endX, endY) and not Core.Pathfinding.isItemTrapped(endX, endY) then
-                                                Core.Pathfinding.aiMoveTo(endX, endY, moveSpeed, "smartAutoFarm")
-                                                didLoot = true
-                                                -- COLLECT SPEED: Jeda saat memungut item beruntun
-                                                task.wait(collectSpeedMs / 1000)
-                                            end
-                                        end
-                                    end
-                                    if didLoot and Core.Toggles.smartAutoFarm then
-                                        Core.Pathfinding.aiMoveTo(startPx, startPy, moveSpeed, "smartAutoFarm")
-                                        Core.Managers.MovementState.Position = farmStartPos
-                                        Core.Managers.MovementState.OldPosition = farmStartPos
-                                    end
-                                end
+                                local delayBreakMs = tonumber(Core.Inputs["smartFarmDelayBox"] and Core.Inputs["smartFarmDelayBox"].Text) or 250
+                                task.wait(delayBreakMs / 1000)
                             end
                             
                             farmIndex = farmIndex + 1
                             if farmIndex > #targetList then
-                                local allEmpty = true
-                                if Core.Managers.WorldManager and Core.Managers.WorldManager.GetTile then
-                                    for _, tgt in ipairs(targetList) do
-                                        local blockHere = false
-                                        for l = 1, 5 do if Core.Managers.WorldManager.GetTile(tgt.x, tgt.y, l) then blockHere = true break end end
-                                        if blockHere then allEmpty = false break end
-                                    end
-                                end
-                                farmPhase = allEmpty and "PLACE" or "BREAK" 
+                                farmPhase = "LOOT" -- Lanjut ke fase LOOT
                                 farmIndex = 1
                             end
+                            
+                        -- =============================
+                        -- FASE 3: AUTO LOOT LALU KEMBALI KE POSISI AWAL
+                        -- =============================
+                        elseif farmPhase == "LOOT" then
+                            local delayCollectMs = tonumber(Core.Inputs["smartFarmDelayCollect"] and Core.Inputs["smartFarmDelayCollect"].Text) or 350
+                            task.wait(delayCollectMs / 1000)
+
+                            local dropsFolder = workspace:FindFirstChild("Drops") or workspace:FindFirstChild("DroppedItems") or workspace:FindFirstChild("Items")
+                            local itemsToLoot = {}
+                            if dropsFolder then
+                                for _, v in ipairs(dropsFolder:GetChildren()) do if v:IsA("BasePart") or v:IsA("Model") then table.insert(itemsToLoot, v) end end
+                            else
+                                for _, obj in ipairs(workspace:GetChildren()) do
+                                    if obj:IsA("BasePart") and not obj:IsDescendantOf(char) and not Core.Players:GetPlayerFromCharacter(obj.Parent) and obj.Size.Y < 3 then table.insert(itemsToLoot, obj) end
+                                end
+                            end
+                            
+                            if #itemsToLoot > 0 then
+                                local pPos = Core.Managers.MovementState.Position
+                                table.sort(itemsToLoot, function(a, b)
+                                    local posA = a:IsA("BasePart") and a.Position or (a:IsA("Model") and a.PrimaryPart and a.PrimaryPart.Position) or Vector3.new(9999,9999,9999)
+                                    local posB = b:IsA("BasePart") and b.Position or (b:IsA("Model") and b.PrimaryPart and b.PrimaryPart.Position) or Vector3.new(9999,9999,9999)
+                                    return (pPos - posA).Magnitude < (pPos - posB).Magnitude
+                                end)
+                                
+                                local moveSpeed = 45
+                                local didLoot = false
+                                local collectSpeedMs = tonumber(Core.Inputs["smartFarmCollectSpeed"] and Core.Inputs["smartFarmCollectSpeed"].Text) or 100
+                                
+                                for _, item in ipairs(itemsToLoot) do
+                                    if not Core.Toggles.smartAutoFarm then break end
+                                    local part = item:IsA("BasePart") and item or (item:IsA("Model") and item.PrimaryPart)
+                                    if part and part.Parent then
+                                        local endX = math.floor(part.Position.X / Core.Utils.TILE_SIZE + 0.5)
+                                        local endY = math.floor(part.Position.Y / Core.Utils.TILE_SIZE + 0.5)
+                                        local distFromStart = math.sqrt((endX - startPx)^2 + (endY - startPy)^2)
+                                        if distFromStart <= 10 and not Core.Pathfinding.isOutOfBounds(endX, endY) and not Core.Pathfinding.isItemTrapped(endX, endY) then
+                                            Core.Pathfinding.aiMoveTo(endX, endY, moveSpeed, "smartAutoFarm")
+                                            didLoot = true
+                                            task.wait(collectSpeedMs / 1000)
+                                        end
+                                    end
+                                end
+                                
+                                if didLoot and Core.Toggles.smartAutoFarm then
+                                    -- KEMBALI KE POSISI AWAL
+                                    Core.Pathfinding.aiMoveTo(startPx, startPy, moveSpeed, "smartAutoFarm")
+                                    Core.Managers.MovementState.Position = farmStartPos
+                                    Core.Managers.MovementState.OldPosition = farmStartPos
+                                end
+                            end
+                            
+                            -- RESET SIKLUS KE FASE PLACE
+                            farmPhase = "PLACE"
+                            farmIndex = 1
                         end
                     else
-                        Core.Toggles.smartAutoFarm = false; print("[NLight] Harap pilih minimal satu Grid melalui tombol 'Select Grid Farm'!"); task.wait(1)
+                        Core.Toggles.smartAutoFarm = false
+                        if updateSmartFarmToggle then updateSmartFarmToggle() end
+                        print("[NLight] Harap pilih minimal satu Grid melalui tombol 'Select Grid Farm'!")
+                        task.wait(1)
                     end
                     
-                    -- DELAY BREAK: Jeda sebelum mengeksekusi blok berikutnya
-                    local delayBreakMs = tonumber(Core.Inputs["smartFarmDelayBox"] and Core.Inputs["smartFarmDelayBox"].Text) or 250
-                    if delayBreakMs > 0 then task.wait(delayBreakMs / 1000) else task.wait() end
+                    if farmPhase == "PLACE" then task.wait() end
                 else
                     farmStartPos = nil; farmPhase = "PLACE"; farmIndex = 1
                     local char = Core.LocalPlayer.Character
