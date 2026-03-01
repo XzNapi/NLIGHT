@@ -26,29 +26,51 @@ return function(Core)
     Core.UI.createToggle("Radar Item Drop", "itemRadar", secLoot, false)
     Core.UI.createToggle("Enable Auto-Loot", "autoLoot", secLoot, false) 
 
-    -- FITUR AUTO DROP ITEM (BYPASS LIMIT 200)
+    -- FITUR AUTO DROP ITEM (BYPASS LIMIT 200 & HIDE UI)
     local secDrop = Core.UI.createSection(Core.Pages.Farm, "Auto Drop Item")
     Core.UI.createInventoryDropdown("Select Item", "dropItemSelect", secDrop)
     local dropAmtBox = Core.UI.createInputRow("Amount to Drop", "1", secDrop, 0.35, "dropAmountBox")
     
+    local isDroppingItem = false -- Variabel kunci untuk mematikan UI game
+
     -- Fungsi Eksekutor Drop 2 Langkah
     local function executeDropChunk(slotIndex, amount)
         pcall(function()
             local playerDropRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("PlayerDrop")
             local promptRemote = ReplicatedStorage:WaitForChild("Managers"):WaitForChild("UIManager"):WaitForChild("UIPromptEvent")
             
-            -- Langkah 1: Pilih Slot
             playerDropRemote:FireServer(slotIndex)
-            task.wait(0.05) -- Beri waktu sedikit untuk server merespons
+            task.wait(0.05) 
             
-            -- Langkah 2: Konfirmasi Jumlah Drop
             promptRemote:FireServer({
                 ButtonAction = "drp",
                 Inputs = { amt = tostring(amount) }
             })
-            task.wait(0.15) -- Jeda anti-kick spam remote
+            task.wait(0.15) 
         end)
     end
+
+    -- Loop UI Suppressor (Berjalan di latar belakang menyembunyikan UI Prompt)
+    task.spawn(function()
+        while task.wait() do
+            if isDroppingItem then
+                pcall(function()
+                    for _, v in ipairs(Core.LocalPlayer.PlayerGui:GetDescendants()) do
+                        local name = string.lower(v.Name)
+                        -- Jika menemukan UI Prompt bawaan game, langsung sembunyikan!
+                        if (v:IsA("Frame") or v:IsA("ImageLabel")) and (string.find(name, "prompt") or string.find(name, "drop") or string.find(name, "amount")) then
+                            if v.Visible then v.Visible = false end
+                        end
+                        if v:IsA("ScreenGui") and string.find(name, "prompt") then
+                            if v.Enabled then v.Enabled = false end
+                        end
+                    end
+                end)
+            else
+                task.wait(0.1)
+            end
+        end
+    end)
 
     Core.UI.createButton("Drop Specified Amount", secDrop, function()
         local targetStr = string.lower(Core.Toggles.dropItemSelect or "auto")
@@ -57,6 +79,7 @@ return function(Core)
 
         local amtToDrop = tonumber(dropAmtBox.Text) or 1
         
+        isDroppingItem = true -- Nyalakan penahan UI
         if Core.Managers.InventoryModule and Core.Managers.InventoryModule.Stacks then
             for i = 1, (Core.Managers.InventoryModule.MaxSlots or 100) do
                 if amtToDrop <= 0 then break end
@@ -70,7 +93,6 @@ return function(Core)
                     
                     if currentID == targetStr or itemName == targetStr then
                         local stackLeft = stackInfo.Amount
-                        -- Looping pemecah chunk maksimal 200 per drop
                         while stackLeft > 0 and amtToDrop > 0 do
                             local dropNow = math.min(amtToDrop, stackLeft, 200)
                             executeDropChunk(i, dropNow)
@@ -83,6 +105,7 @@ return function(Core)
                 end
             end
         end
+        task.delay(0.5, function() isDroppingItem = false end) -- Matikan penahan UI
     end)
 
     Core.UI.createButton("Drop ALL of Selected", secDrop, function()
@@ -90,6 +113,7 @@ return function(Core)
         if targetStr == "auto" or targetStr == "" then targetStr = Core.Utils.getHeldItem() end
         if not targetStr then return end
 
+        isDroppingItem = true -- Nyalakan penahan UI
         if Core.Managers.InventoryModule and Core.Managers.InventoryModule.Stacks then
             for i = 1, (Core.Managers.InventoryModule.MaxSlots or 100) do
                 local stackInfo = Core.Managers.InventoryModule.Stacks[i]
@@ -102,7 +126,6 @@ return function(Core)
                     
                     if currentID == targetStr or itemName == targetStr then
                         local stackLeft = stackInfo.Amount
-                        -- Looping membuang semua isi slot ini (dipecah per 200)
                         while stackLeft > 0 do
                             local dropNow = math.min(stackLeft, 200)
                             executeDropChunk(i, dropNow)
@@ -113,6 +136,7 @@ return function(Core)
                 end
             end
         end
+        task.delay(0.5, function() isDroppingItem = false end) -- Matikan penahan UI
     end)
     
     Core.UI.createToggle("Enable Auto Drop (Loop)", "autoDrop", secDrop, false)
@@ -519,9 +543,10 @@ return function(Core)
                                     itemName = string.lower(tostring(Core.Managers.ItemsManager.ItemsData[tostring(stackInfo.Id)].Name or currentID))
                                 end
                                 if currentID == targetStr or itemName == targetStr then
-                                    -- Auto Drop membuang max 200 item per putaran loop agar aman
+                                    isDroppingItem = true
                                     local dropNow = math.min(stackInfo.Amount, 200)
                                     executeDropChunk(i, dropNow)
+                                    task.delay(0.5, function() isDroppingItem = false end)
                                     task.wait(0.2)
                                 end
                             end
