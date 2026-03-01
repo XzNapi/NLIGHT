@@ -3,7 +3,6 @@ return function(Core)
     local secSmartFarm = Core.UI.createSection(Core.Pages.Farm, "Smart Auto-Farm Engine")
     Core.UI.createButton("Select Grid Farm", secSmartFarm, function() Core.UI.popupOverlay.Visible = true end)
     Core.UI.createInventoryDropdown("Item to Place", "smartFarmItem", secSmartFarm)
-    Core.UI.createInputRow("Hit Count", "25", secSmartFarm, 0.35, "smartFarmHitCount")
     Core.UI.createInputRow("Delay Break (ms)", "250", secSmartFarm, 0.35, "smartFarmDelayBox")
     Core.UI.createInputRow("Delay Collect (ms)", "350", secSmartFarm, 0.35, "smartFarmDelayCollect")
     Core.UI.createInputRow("Collect Speed (ms)", "100", secSmartFarm, 0.35, "smartFarmCollectSpeed")
@@ -113,7 +112,7 @@ return function(Core)
                             end
 
                             if hasBlock then
-                                local hitsToSend = tonumber(Core.Inputs["smartFarmHitCount"] and Core.Inputs["smartFarmHitCount"].Text) or 25
+                                local hitsToSend = 25 -- Default hit count secara internal
                                 for i = 1, hitsToSend do Core.Remotes.PlayerFistRemote:FireServer(targetGrid) end
                                 
                                 -- DELAY COLLECT: Menunggu server memunculkan item drop
