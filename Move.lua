@@ -5,7 +5,7 @@ return function(Core)
 
     local secChar = Core.UI.createSection(Core.Pages.Move, "Character")
     Core.UI.createToggle("God Mode (Invincible)", "godMode", secChar)
-    Core.UI.createToggle("Anti Punch (No Knockback)", "antiPunch", secChar) -- FITUR BARU DITAMBAHKAN DI SINI
+    Core.UI.createToggle("Anti Punch (No Knockback)", "antiPunch", secChar)
     Core.UI.createToggle("Admin Teleport (Click)", "devTeleport", secChar)
 
     local secMove = Core.UI.createSection(Core.Pages.Move, "Movement Adjustments")
@@ -16,6 +16,7 @@ return function(Core)
 
     -- Logic
     local isHoldingSpace = false
+    local lockedX = nil -- Variabel untuk menyimpan posisi
 
     Core.UIS.InputBegan:Connect(function(input, gpe)
         if input.KeyCode == Enum.KeyCode.Space then isHoldingSpace = true end
@@ -28,6 +29,7 @@ return function(Core)
                 Core.Managers.MovementState.Position = newPos
                 Core.Managers.MovementState.OldPosition = newPos
                 Core.Managers.MovementState.VelocityX, Core.Managers.MovementState.VelocityY = 0, 0
+                lockedX = newPos.X -- Update kunci posisi saat teleport
             end
         end
     end)
@@ -38,32 +40,55 @@ return function(Core)
 
     Core.RS.RenderStepped:Connect(function()
         pcall(function()
-            -- GOD MODE LOGIC
             if Core.Toggles.godMode and Core.LocalPlayer.Character and Core.LocalPlayer.Character:FindFirstChild("Humanoid") then 
                 Core.LocalPlayer.Character.Humanoid.Health = Core.LocalPlayer.Character.Humanoid.MaxHealth 
             end
             
             if Core.Managers.MovementState then
-                -- ANTI PUNCH LOGIC (Mencegah pergeseran dari luar)
+                -- ANTI PUNCH LOGIC (Aggressive Position Lock)
                 if Core.Toggles.antiPunch then
-                    -- Jika player tidak menekan tombol jalan (A/D), kunci Velocity X agar tidak bisa didorong
+                    -- Jika player sedang TIDAK berjalan
                     if Core.Managers.MovementState.MoveX == 0 then
-                        Core.Managers.MovementState.VelocityX = 0
+                        if not lockedX then
+                            lockedX = Core.Managers.MovementState.Position.X
+                        else
+                            local currentX = Core.Managers.MovementState.Position.X
+                            local diff = math.abs(currentX - lockedX)
+                            
+                            -- Jika game menggeser kita karena dipukul (selisih kecil-menengah)
+                            if diff > 0 and diff < 15 then
+                                -- Tarik balik secara paksa ke posisi semula
+                                Core.Managers.MovementState.Position = Vector3.new(lockedX, Core.Managers.MovementState.Position.Y, Core.Managers.MovementState.Position.Z)
+                                Core.Managers.MovementState.OldPosition = Core.Managers.MovementState.Position
+                                Core.Managers.MovementState.VelocityX = 0
+                            elseif diff >= 15 then
+                                -- Jika tiba-tiba pindah jauh (misal teleport / respawn), reset kunci
+                                lockedX = currentX
+                            end
+                        end
+                    else
+                        -- Jika player sedang berjalan, lepaskan kunci
+                        lockedX = nil
                     end
-                    -- Bersihkan variabel knockback jika game menggunakannya
-                    Core.Managers.MovementState.KnockbackX = 0
-                    Core.Managers.MovementState.KnockbackY = 0
+
+                    -- Matikan Physics Roblox (Untuk memastikan karakter tidak memantul secara visual)
+                    local char = Core.LocalPlayer.Character
+                    local hrp = char and (char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart)
+                    if hrp then
+                        hrp.Velocity = Vector3.new(0, hrp.Velocity.Y, 0)
+                        hrp.RotVelocity = Vector3.zero
+                    end
+                else
+                    lockedX = nil
                 end
-                
+
                 -- SPEED & MOVEMENT LOGIC
                 if Core.Toggles.speed and Core.Managers.MovementState.MoveX ~= 0 then 
                     Core.Managers.MovementState.VelocityX = Core.Managers.MovementState.MoveX * (tonumber(Core.Inputs["speedBox"] and Core.Inputs["speedBox"].Text) or 2.0) 
                 end
-                
                 if Core.Toggles.infJump then 
                     Core.Managers.MovementState.RemainingJumps = 999; Core.Managers.MovementState.MaxJump = 999 
                 end
-                
                 if Core.Toggles.fly then 
                     Core.Managers.MovementState.VelocityY = 0
                     if isHoldingSpace then 
